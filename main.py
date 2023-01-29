@@ -1,4 +1,4 @@
-# import lotto_store_scraps
+import lotto_store_crawling
 from jaydebeapi import connect
 
 def _convert_to_schema(cursor):
@@ -21,8 +21,12 @@ def _execute(query, flag=False):
     cursor.close()
     conn.close()
 if __name__ == "__main__":
-   
-    cursor.rowcount
+    url = "https://dhlottery.co.kr/store.do"
+    queryString = {
+        "method":"sellerInfoPrintResult"
+    }
+    parse_store = lotto_store_crawling.ParseStore()
+    parse_store.parseStoreInfo(url, queryString)
     
 
     # print(cursor.fetchall())
