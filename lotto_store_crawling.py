@@ -20,7 +20,7 @@ class StoreInfo:
     openHours      : str                                       #영업 시작 시간
     closeHours     : str                                       #영업 폐점 시간
     storeCloseFlag : bool = False                              #폐점 여부
-    lottoHandleList: lottoHandleList                           #취급 복권 리스트
+    lottoHandleList: LottoHandleList                           #취급 복권 리스트
     winHistory     : WinHistory                                #당첨 내역
 
 @dataclass(unsafe_hash=True)
