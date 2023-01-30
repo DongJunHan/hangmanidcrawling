@@ -6,6 +6,7 @@ or
 """
 from dataclasses import dataclass, field
 from typing import List
+import json
 @dataclass(unsafe_hash=True)
 class StoreInfo:
     storeId        : str                                       #상점 ID PK값
@@ -13,23 +14,33 @@ class StoreInfo:
     storeAddress   : str                                       #상점 주소
     storeLatitude  : float                                     #상점 위도
     storeLongitude : float                                     #상점 경도
+    businessNumber : str                                       #사업자 번호
     storeTel       : str                                       #상점 전화번호
     storeMobil     : str                                       #상점 핸드폰번호
-    operatingHours : str                                       #영업 시간
+    openHours      : str                                       #영업 시작 시간
+    closeHours     : str                                       #영업 폐점 시간
     storeCloseFlag : bool = False                              #폐점 여부
-    lotteHandleFlag: List[bool] = field(default_factory=list)  #취급로또 여부 리스트
-    # rankPriorty    : StoreRank
+    lottoHandleList: lottoHandleList                           #취급 복권 리스트
+    winHistory     : WinHistory                                #당첨 내역
 
 @dataclass(unsafe_hash=True)
-class StoreRank:
-    rankOne        : int                                       #1등 당첨 횟수
-    rankTwo        : int                                       #2등 당첨 횟수
-    
-    # lotto645Flag: bool = False    #로또645 취급여부
-    # annuityFlag: bool = False     #연금복권 취급여부
-    # speetto500Flag: bool = False  #스피또500 취급여부
-    # speetto1000Flag: bool = False #스피또1000 취급여부
-    # speetto2000Flag: bool = False #스피또2000 취급여부
+class LottoHandleList:
+    storeId        : str                                       #상점 ID PK값
+    lottoList      : lottoList                                 #로또 리스트 DTO
+
+@dataclass(unsafe_hash=True)
+class LottoList:
+    lottoId        : int                                       #복권 PK
+    lottoCode      : str                                       #복권 종류 코드
+    lottoName      : str                                       #복권 이름
+
+@dataclass(unsafe_hash=True)
+class WinHistory:
+    storeId        : str                                       #상점 ID PK값
+    winRound       : int                                       #당첨 회차
+    winRank        : int                                       #당첨 등수
+    lottoList      : LottoList                                 #로또 리스트 DTO
+
 address_map = {
     "서울" : ["강남구","강동구","강북구","강서구","관악구","광진구","구로구","금천구","노원구","도봉구","동대문구","동작구","마포구","서대문구","서초구",
             "성동구","성북구","송파구","양천구","영등포구","용산구","은평구","종로구","중구","중랑구"],
@@ -63,15 +74,7 @@ address_map = {
 import requests
 import json
 class ParseStore:
-    """
-        TODO. 로또 645리스트와 연금및즉석복권판매점 정보들을 비교하여 매핑시키는 작업 (연금및즉석복권판매점에 로또645 정보도 포함되어있기 때문)
-        --1. 시군구 비교--
-        --2. 전화번호 비교--
-        --3. 위도/경도 비교 (소수점 3번째까지만)--
 
-        비교 끝 매핑하는 작업 남음.
-        3개의 조건이 맞아야 같은 가게로 판별. 아니면 다른가게로서 DB에 넣어야함.
-    """ 
     def compareStores(self, originData, compareData):
         """
             Args:
@@ -82,37 +85,60 @@ class ParseStore:
         """
         for i in range(len(compareData)):
             comTelNum = compareData[i]["RTLRSTRTELNO"] #tel number
-            comLatitude = compareData[i]["LATITUDE"].split(".") #latitude
-            comLongituede = compareData[i]["LONGITUDE"].split(".") #longitude
+            comTude = [str(compareData[i]["LATITUDE"]), str(compareData[i]["LONGITUDE"])] #latitude, longitude
             equalFlag = False
             for j in range(len(originData)):
+                oriTude = [originData[j]["ADDR_LAT"], originData[j]["ADDR_LOT"]] #latitude, longitude
                 oriTelNum = originData[j]["TELEPHONE"]
-                if comTelNum is None and oriTelNum is None:
-                    pass
-                elif comTelNum is not None and oriTelNum is not None:
-                    pass
-                else:
-                    #not equal data 각각 처리
-                    continue
+                if self._compare_longitude_and_latitude(oriTude, comTude):
+                        equalFlag = True
+                        break
+                # if (comTelNum == None) or (oriTelNum == None):
+                    # if self._compare_longitude_and_latitude(oriTude, comTude):
+                        # equalFlag = True
+                        # break
+                # elif (comTelNum != None) and (oriTelNum != None):
+                    # if comTelNum == oriTelNum:
+                        # if self._compare_longitude_and_latitude(oriTude, comTude):
+                            # equalFlag = True
+                            # break
 
-                if telNumber == oriTelNum:
-                    oriLatitude = originData[j]["ADDR_LAT"].split(".")
-                    oriLongitude = originData[j]["ADDR_LOT"].split(".")
-                    if comLatitude[0] != oriLatitude[0] or comLongituede[0] != oriLongitude[0]:
-                        #not equal data 각각 처리
-                        continue
-                    if abs(int(comLatitude[1][:3]) - int(oriLatitude[1][:3])) > 4 or abs(int(comLongituede[1][:3]) - int(oriLongitude[1][:3])) > 4:
-                        #not equal data 각각 처리 오차가 5이상 나기 시작하면 다른 가게라고 판단
-                        continue
-                    #equal store 같은 데이터로서 취급하고 아웃
-                    equalFlag = True
-                    break
-            if equalFlag:
+            """
+                TODO. 
+                equalFlag값이 False이면 두 데이터들 중에 같은게 없다는 뜻이므로 각각 따로 저장하나
+                    True이면 같은 상점 정보이기 때문에 정보량이 더 많은 speetto데이터만 저장한다.
+            """
+            if equalFlag == False:
+                #try save lotto645 data
+                pass
 
-                pass
-            else:
-                pass
+            #try save speetto data
+
             
+    def _compare_longitude_and_latitude(self, originData, compareData):
+        """
+            Args:
+                originData : list 0:latitude, 1:longitude
+                compareData: list 0:latitude, 1:longitude
+            Return:
+                bool
+        """
+        ret = True
+        for i in range(len(originData)):
+            ori = originData[i].split(".")
+            com = compareData[i].split(".")
+
+            if int(ori[0]) != int(com[0]):
+                #not equal data 각각 처리
+                ret = False
+                break
+            if abs(int(ori[1][:4]) - int(com[1][:4])) > 4:
+                #not equal data 각각 처리 오차가 5이상 나기 시작하면 다른 가게라고 판단
+                ret = False
+                break
+        return ret
+
+
 
 
     def parseStoreInfo(self, url, gugun, sido, queryString:dict=None):
@@ -147,45 +173,33 @@ class ParseStore:
         session = requests.Session()
         # session.verify = "FidderRootCertificate.crt"
         validateInfo = None
-        while True:
+        for i in range(20):
             response = session.request("POST",url,headers=headers, data=postData, params=param)
             jsonData = response.json()
-            print(f"{jsonData['arr'][0]}")
-            if validateInfo is not None and validateInfo == jsonData["arr"][0]["SHOP_NM"]:
-                break
-            validateInfo = jsonData["arr"][0]["SHOP_NM"]
+
+            if validateInfo is not None:
+                if "SHOP_NM" in jsonData["arr"][0].keys():
+                    if validateInfo == jsonData["arr"][0]["SHOP_NM"]:
+                        break
+                    else:
+                        validateInfo = jsonData["arr"][0]["SHOP_NM"]
+                else:
+                    if validateInfo == jsonData["arr"][0]["FIRMNM"]:
+                        break
+                    else:
+                        validateInfo = jsonData["arr"][0]["FIRMNM"]
+            else:
+                if "SHOP_NM" in jsonData["arr"][0].keys():
+                    validateInfo = jsonData["arr"][0]["SHOP_NM"]
+                else:
+                    validateInfo = jsonData["arr"][0]["FIRMNM"]
+            
             postData["nowPage"] = str(int(postData["nowPage"]) + 1)
             for i in jsonData["arr"]:
                 result.append(i)
-        return result
-        # for key in address_map.keys():
-        #     data["sltSIDO"] = key
-        #     #new page 갱신해가면서 정보 수집
-        #     for gugun in address_map[key]:
-        #         data["sltGUGUN"] = gugun
-        #         """
-        #             self,
-        #             method,
-        #             url,
-        #             params=None,
-        #             data=None,
-        #             headers=None,
-        #             cookies=None,
-        #             files=None,
-        #             auth=None,
-        #             timeout=None,
-        #             allow_redirects=True,
-        #             proxies=None,
-        #             hooks=None,
-        #             stream=None,
-        #             verify=None,
-        #             cert=None,
-        #             json=None,
-        #         """
-        #         response = session.request("POST",url,headers=headers, data=data, params=param)
-        #         print(response.json())
-        #         print(response.cookies.items())
 
+        return result
+        
     def getStoreData(self):
         url = "https://dhlottery.co.kr/store.do"
         for key in address_map.keys():
@@ -194,3 +208,12 @@ class ParseStore:
                 speetto = self.parseStoreInfo(url, gugun, sido, {"method":"sellerInfoPrintResult"})
                 lotto645 = self.parseStoreInfo(url, gugun, sido, {"method":"sellerInfo645Result"})
                 result = self.compareStores(speetto, lotto645)
+
+    def test(self):
+        with open("./test/sellerInfo645Result_강남구_Result_.json","r") as file:
+            lotto645 = json.load(file)
+        with open("./test/sellerInfoPrintResult_강남구_Result_.json","r") as file:
+            speetto = json.load(file)
+        
+        self.compareStores(speetto, lotto645)
+        

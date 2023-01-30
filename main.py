@@ -21,12 +21,10 @@ def _execute(query, flag=False):
     cursor.close()
     conn.close()
 if __name__ == "__main__":
-    url = "https://dhlottery.co.kr/store.do"
-    queryString = {
-        "method":"sellerInfoPrintResult"
-    }
+
     parse_store = lotto_store_crawling.ParseStore()
-    parse_store.parseStoreInfo(url, queryString)
+    parse_store.getStoreData()
+    # parse_store.test()
     
 
     # print(cursor.fetchall())
