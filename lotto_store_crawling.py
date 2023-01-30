@@ -7,6 +7,18 @@ or
 from dataclasses import dataclass, field
 from typing import List
 import json
+
+@dataclass(unsafe_hash=True)
+class LottoHandleList:
+    storeId        : str                                       #상점 ID PK값
+    lottoList      : lottoList                                 #로또 리스트 DTO
+
+@dataclass(unsafe_hash=True)
+class LottoList:
+    lottoId        : int                                       #복권 PK
+    lottoCode      : str                                       #복권 종류 코드
+    lottoName      : str                                       #복권 이름
+
 @dataclass(unsafe_hash=True)
 class StoreInfo:
     storeId        : str                                       #상점 ID PK값
@@ -23,16 +35,7 @@ class StoreInfo:
     lottoHandleList: LottoHandleList                           #취급 복권 리스트
     winHistory     : WinHistory                                #당첨 내역
 
-@dataclass(unsafe_hash=True)
-class LottoHandleList:
-    storeId        : str                                       #상점 ID PK값
-    lottoList      : lottoList                                 #로또 리스트 DTO
 
-@dataclass(unsafe_hash=True)
-class LottoList:
-    lottoId        : int                                       #복권 PK
-    lottoCode      : str                                       #복권 종류 코드
-    lottoName      : str                                       #복권 이름
 
 @dataclass(unsafe_hash=True)
 class WinHistory:
