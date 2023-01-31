@@ -5,44 +5,70 @@ or
 1. 시/도, 도/군들을 가지고 있다가 바로 2번을 수행
 """
 from dataclasses import dataclass, field
+from typing import ClassVar
 from typing import List
-import json
+import jdbc
+import uuid
+
+
+@dataclass(unsafe_hash=True)
+class LottoType:
+    lottoId        : str                                       #복권 PK
+    lottoCode      : str                                       #복권 종류 코드
+    lottoName      : str                                       #복권 이름
+    def __init__(self):
+        pass
 
 @dataclass(unsafe_hash=True)
 class LottoHandleList:
     storeId        : str                                       #상점 ID PK값
-    lottoList      : lottoList                                 #로또 리스트 DTO
-
-@dataclass(unsafe_hash=True)
-class LottoList:
-    lottoId        : int                                       #복권 PK
-    lottoCode      : str                                       #복권 종류 코드
-    lottoName      : str                                       #복권 이름
-
-@dataclass(unsafe_hash=True)
-class StoreInfo:
-    storeId        : str                                       #상점 ID PK값
-    storeName      : str                                       #상점 이름
-    storeAddress   : str                                       #상점 주소
-    storeLatitude  : float                                     #상점 위도
-    storeLongitude : float                                     #상점 경도
-    businessNumber : str                                       #사업자 번호
-    storeTel       : str                                       #상점 전화번호
-    storeMobil     : str                                       #상점 핸드폰번호
-    openHours      : str                                       #영업 시작 시간
-    closeHours     : str                                       #영업 폐점 시간
-    storeCloseFlag : bool = False                              #폐점 여부
-    lottoHandleList: LottoHandleList                           #취급 복권 리스트
-    winHistory     : WinHistory                                #당첨 내역
-
-
+    lottoList      : list                                      #로또 리스트 DTO
+    def __init__(self):
+        pass
 
 @dataclass(unsafe_hash=True)
 class WinHistory:
     storeId        : str                                       #상점 ID PK값
     winRound       : int                                       #당첨 회차
     winRank        : int                                       #당첨 등수
-    lottoList      : LottoList                                 #로또 리스트 DTO
+    lottoType      : ClassVar[LottoType]                       #로또 리스트 DTO
+    def __init__(self):
+        pass
+
+@dataclass(unsafe_hash=True)
+class StoreInfo:
+    storeUuid      : str                                       #상점 ID PK값
+    storeName      : str                                       #상점 이름
+    storeAddress   : str                                       #상점 주소
+    storeLatitude  : float                                     #상점 위도
+    storeLongitude : float                                     #상점 경도
+    storeBizNo     : str                                       #사업자 번호
+    storeTelNum    : str                                       #상점 전화번호
+    storeMobileNum : str                                       #상점 핸드폰번호
+    storeOpenTime  : str                                       #영업 시작 시간
+    storeCloseTime : str                                       #영업 폐점 시간
+    storeisActivity: bool = False                              #폐점 여부
+    lottoHandle    : ClassVar[LottoHandleList]                 #취급 복권 리스트
+    # winHistory     : WinHistory                                #당첨 내역
+
+    def __init__(self, storeUuid = None, storeName = None, storeAddress = None, storeLatitude = None,
+                    storeLongitude = None, storeBizNo = None, storeTelNum = None,
+                    storeMobileNum = None, storeOpenTime = None, storeCloseTime = None, 
+                    lottoHandle = None):
+        self.storeUuid = storeUuid
+        self.storeName = storeName
+        self.storeAddress = storeAddress
+        self.storeLatitude = storeLatitude
+        self.storeLongitude = storeLongitude
+        self.storeBizNo = storeBizNo
+        self.storeTelNum = storeTelNum
+        self.storeMobileNum = storeMobileNum
+        self.storeOpenTime = storeOpenTime
+        self.storeCloseTime = storeCloseTime
+        self.lottoHandle = lottoHandle
+        
+
+
 
 address_map = {
     "서울" : ["강남구","강동구","강북구","강서구","관악구","광진구","구로구","금천구","노원구","도봉구","동대문구","동작구","마포구","서대문구","서초구",
@@ -84,13 +110,15 @@ class ParseStore:
                 originData : dict
                 compareData : dict
             Return:
-                dict
+                list[StoreInfo]
         """
+        result = list()
         for i in range(len(compareData)):
             comTelNum = compareData[i]["RTLRSTRTELNO"] #tel number
             comTude = [str(compareData[i]["LATITUDE"]), str(compareData[i]["LONGITUDE"])] #latitude, longitude
             equalFlag = False
             for j in range(len(originData)):
+                settingData = originData
                 oriTude = [originData[j]["ADDR_LAT"], originData[j]["ADDR_LOT"]] #latitude, longitude
                 oriTelNum = originData[j]["TELEPHONE"]
                 if self._compare_longitude_and_latitude(oriTude, comTude):
@@ -112,12 +140,161 @@ class ParseStore:
                     True이면 같은 상점 정보이기 때문에 정보량이 더 많은 speetto데이터만 저장한다.
             """
             if equalFlag == False:
+                store = self._setting_storeinfo_object(compareData[i])
+                result.append(store)
+                # print(store.__str__())
                 #try save lotto645 data
                 pass
-
-            #try save speetto data
-
+        for data in originData:
+            store = self._setting_storeinfo_object(data)
+            result.append(store)
+            # print(store.__str__())
+        return result
+    """
+    lotto645
+        {
+        "BPLCLOCPLC3": "역삼동",
+        "BPLCLOCPLC2": "강남구",
+        "BPLCLOCPLC1": "서울",
+        "FIRMNM": "투싼",
+        "DEALSPEETO": "N",
+        "LONGITUDE": 127.048325,
+        "BPLCLOCPLC4": null,
+        "RECORDNO": 53,
+        "BPLCLOCPLCDTLADRES": "755 한솔필리아 1층 127호",
+        "RTLRID": "11140733",
+        "RTLRSTRTELNO": null,
+        "DEAL645": "1",
+        "BPLCDORODTLADRES": "서울 강남구 역삼로 310 한솔필리아 1층 127호",
+        "DEAL520": "N",
+        "LATITUDE": 37.499457
+        }
+    speetto
+        {
+            "BPLCLOCPLC3": "언주로147길",
+            "BPLCLOCPLC2": "강남구",
+            "BPLCLOCPLC1": "서울",
+            "TELEPHONE": null,
+            "BIZ_NO": "2110623717",
+            "SHOP_NM": "GS25강남나누리점",
+            "BIZ_TYPE": null,
+            "ADDR_LOT": "127.033405",
+            "BPLCLOCPLC4": "10 1층",
+            "RECORDNO": 59,
+            "BPLCLOCPLCDTLADRES": null,
+            "USE_YN": "Y",
+            "FAX_NO": null,
+            "POPCORN_YN": "N",
+            "DEALER_ID": null,
+            "VENDOR_CODE": "71165364",
+            "BIZ_ITEM": "GS",
+            "ADDR_LAT": "37.519995",
+            "MOB_NO": "01089216285",
+            "LOTT_YN": "Y",
+            "ANNUITY_YN": "Y",
+            "SPEETTO500_YN": "Y",
+            "SPEETTO1000_YN": "Y",
+            "SPEETTO2000_YN": "Y"
+        }   
+    """
+    def _setting_storeinfo_object(self, storeData:dict):
+        """
+            Args:
+                storeData: dict #json으로 응답받은 상점정보
+            Return:
+                StoreInfo
+        """
+        storeInfo = StoreInfo()
+        lottoType = LottoType()
+        lottoHandle = LottoHandleList()
+        lottoList = list()
+        storeInfo.storeOpenTime = None
+        storeInfo.storeCloseTime = None
+        #set uuid
+        storeInfo.storeUuid = str(uuid.uuid1())
+        if "LONGITUDE" in storeData.keys():
+            #lotto645
+            storeInfo.storeName = storeData["FIRMNM"]
+            storeInfo.storeAddress = storeData["BPLCDORODTLADRES"]
+            storeInfo.storeLatitude = str(storeData["LATITUDE"])
+            storeInfo.storeLongitude = str(storeData["LONGITUDE"])
+            storeInfo.storeBizNo = None
+            storeInfo.storeMobileNum = None
+            storeInfo.storeTelNum = str(storeData["RTLRSTRTELNO"])
+            #set LottoType  Object
+            lottoList.append(self._set_lottoType("001", "로또645"))
             
+            #set LottoHandleList Object
+            lottoHandle.storeId = storeInfo.storeUuid
+            lottoHandle.lottoList = lottoList
+            
+            storeInfo.lottoHandle = lottoHandle
+        else:
+            #speetto
+            address = []
+            address.append(storeData["BPLCLOCPLC1"])
+            address.append(storeData["BPLCLOCPLC2"])
+            address.append(storeData["BPLCLOCPLC3"])
+            address.append(storeData["BPLCLOCPLC4"])
+            storeInfo.storeName = storeData["SHOP_NM"]
+            storeInfo.storeAddress = " ".join(address)
+            storeInfo.storeLatitude = str(storeData["ADDR_LAT"])
+            storeInfo.storeLongitude = str(storeData["ADDR_LOT"])
+            storeInfo.storeBizNo = str(storeData["BIZ_NO"])
+            storeInfo.storeMobileNum = str(storeData["MOB_NO"])
+            storeInfo.storeTelNum = str(storeData["TELEPHONE"])
+
+            if storeData["LOTT_YN"] == "Y":
+                lottoList.append(self._set_lottoType("001", "로또645"))
+            elif storeData["ANNUITY_YN"] == "Y":
+                lottoList.append(self._set_lottoType("002", "연금복권"))
+            elif storeData["SPEETTO500_YN"] == "Y":
+                lottoList.append(self._set_lottoType("003", "스피또500"))
+            elif storeData["SPEETTO1000_YN"] == "Y":
+                lottoList.append(self._set_lottoType("004", "스피또1000"))
+            elif storeData["SPEETTO2000_YN"] == "Y":
+                lottoList.append(self._set_lottoType("005", "스피또2000"))
+
+            #set LottoHandleList Object
+            lottoHandle.storeId = storeInfo.storeUuid
+            lottoHandle.lottoList = lottoList
+            
+            storeInfo.lottoHandle = lottoHandle
+        return storeInfo
+
+    def _set_lottoType(self, ltype, name):
+        """
+            Args:
+                ltype: str 복권 타입(정해져있음)
+                name: str 복권명
+            Return
+                LottoType
+        """
+        lottoType = LottoType()
+        lottoType.lottoId = str(uuid.uuid1())
+        lottoType.lottoCode = ltype
+        lottoType.lottoName = name
+        return lottoType
+        
+    def save_store_data(self, storeDataes):
+        key = list()
+        value = list()
+        for data in storeDataes:
+            key = []
+            value = []
+            data_dict = data.__dict__
+            for k, v in data_dict.items():
+                if k == "lottoHandle":
+                    continue
+                key.append(k)
+                if v is None:
+                    v = "NULL"
+                value.append(v)
+            columnName = ",".join(key)
+            columnValues = ",".join("'{}'".format(i) for i in value)
+            jdbc.execute(f"insert into store({columnName}) values({columnValues});")
+
+                   
     def _compare_longitude_and_latitude(self, originData, compareData):
         """
             Args:
@@ -218,5 +395,6 @@ class ParseStore:
         with open("./test/sellerInfoPrintResult_강남구_Result_.json","r") as file:
             speetto = json.load(file)
         
-        self.compareStores(speetto, lotto645)
+        storeDataes = self.compareStores(speetto, lotto645)
+        self.save_store_data(storeDataes)
         
