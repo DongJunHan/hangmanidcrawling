@@ -1,0 +1,6 @@
+#jaydebeapi package paramaters
+jclassname: org.h2.Driver
+url : jdbc:h2:tcp://localhost/~/test
+username: sa
+password:
+dbjarpath: /Users/handongjun/Downloads/h2/bin/h2-1.4.200.jar

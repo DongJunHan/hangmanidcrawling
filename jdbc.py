@@ -1,11 +1,25 @@
 from jaydebeapi import connect
+import yaml
+import os
 
 def _convert_to_schema(cursor):
     column_names = [record[0].lower() for record in cursor.description]
     column_and_values = [dict(zip(column_names, record)) for record in cursor.fetchall()]
-    print(f"names: {column_names}, value: {column_and_values}")
     # return ExoplanetSchema().load(column_and_values, many=True)
     return column_and_values
+
+def _get_config_data():
+    config = dict()
+    if os.path.isfile("./config/config.yaml"):
+        with open("config/config.yaml", "r",encoding="utf-8") as file:
+            yaml_object = yaml.load(file,Loader=yaml.FullLoader)
+            for key, value in yaml_object.items():
+                config[key] = value
+    else:
+        print(f"[ERROR] config.yaml 파일이 없습니다. 현재 경로: [{os.getcwd()}]")
+        return None
+    return config
+
 
 def execute(query, selectFlag=False):
     """
@@ -16,16 +30,18 @@ def execute(query, selectFlag=False):
             list
     """
     result = None
-    conn = connect(jclassname="org.h2.Driver",
-                           url="jdbc:h2:tcp://localhost/~/test",
-                           driver_args=["sa", ""],jars=['/Users/handongjun/Downloads/h2/bin/h2-1.4.200.jar'])
-    cursor = conn.cursor()
-    cursor.execute(query)
-    # cursor.execute("SELECT * FROM MEMBER where member_id='member'")
-    # cursor.execute("select * from member")
-    if selectFlag:
-        result = _convert_to_schema(cursor)
-
-    cursor.close()
-    conn.close()
+    config = _get_config_data()
+    try:
+        conn = connect(jclassname=config["jclassname"],
+                               url=config["url"],
+                               driver_args=[config["username"], config["password"]],jars=[config["dbjarpath"]])
+        cursor = conn.cursor()
+        cursor.execute(query)
+        if selectFlag:
+            result = _convert_to_schema(cursor)
+    except Exception as e:
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
     return result
