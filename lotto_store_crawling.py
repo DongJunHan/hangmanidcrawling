@@ -102,8 +102,21 @@ address_map = {
 }
 import requests
 import json
+import html
+from html.parser import HTMLParser
 class ParseStore:
 
+    def _remove_special_symbol(self, text):
+        """
+            Args:
+                text: str
+            Return:
+                result: str
+        """
+        escape = html.parser
+        while "&#" in text:
+            text = escape.unescape(text)
+        return text
     def compareStores(self, originData, compareData):
         """
             Args:
@@ -134,11 +147,6 @@ class ParseStore:
                             # equalFlag = True
                             # break
 
-            """
-                TODO. 
-                equalFlag값이 False이면 두 데이터들 중에 같은게 없다는 뜻이므로 각각 따로 저장하나
-                    True이면 같은 상점 정보이기 때문에 정보량이 더 많은 speetto데이터만 저장한다.
-            """
             if equalFlag == False:
                 store = self._setting_storeinfo_object(compareData[i])
                 result.append(store)
@@ -214,13 +222,13 @@ class ParseStore:
         storeInfo.storeUuid = str(uuid.uuid1())
         if "LONGITUDE" in storeData.keys():
             #lotto645
-            storeInfo.storeName = storeData["FIRMNM"]
+            storeInfo.storeName = self._remove_special_symbol(storeData["FIRMNM"])
             storeInfo.storeAddress = storeData["BPLCDORODTLADRES"]
             storeInfo.storeLatitude = str(storeData["LATITUDE"])
             storeInfo.storeLongitude = str(storeData["LONGITUDE"])
             storeInfo.storeBizNo = None
             storeInfo.storeMobileNum = None
-            storeInfo.storeTelNum = str(storeData["RTLRSTRTELNO"])
+            storeInfo.storeTelNum = storeData["RTLRSTRTELNO"]
             #set LottoType  Object
             lottoList.append(self._set_lottoType("001", "로또645"))
             
@@ -236,13 +244,13 @@ class ParseStore:
             address.append(storeData["BPLCLOCPLC2"])
             address.append(storeData["BPLCLOCPLC3"])
             address.append(storeData["BPLCLOCPLC4"])
-            storeInfo.storeName = storeData["SHOP_NM"]
+            storeInfo.storeName = self._remove_special_symbol(storeData["SHOP_NM"])
             storeInfo.storeAddress = " ".join(address)
             storeInfo.storeLatitude = str(storeData["ADDR_LAT"])
             storeInfo.storeLongitude = str(storeData["ADDR_LOT"])
-            storeInfo.storeBizNo = str(storeData["BIZ_NO"])
-            storeInfo.storeMobileNum = str(storeData["MOB_NO"])
-            storeInfo.storeTelNum = str(storeData["TELEPHONE"])
+            storeInfo.storeBizNo = storeData["BIZ_NO"]
+            storeInfo.storeMobileNum = storeData["MOB_NO"]
+            storeInfo.storeTelNum = storeData["TELEPHONE"]
 
             if storeData["LOTT_YN"] == "Y":
                 lottoList.append(self._set_lottoType("001", "로또645"))
@@ -280,6 +288,7 @@ class ParseStore:
         key = list()
         value = list()
         for data in storeDataes:
+            print(data)
             key = []
             value = []
             data_dict = data.__dict__
@@ -287,7 +296,7 @@ class ParseStore:
                 if k == "lottoHandle":
                     continue
                 key.append(k)
-                if v is None:
+                if v == None:
                     v = "NULL"
                 value.append(v)
             columnName = ",".join(key)
@@ -390,9 +399,9 @@ class ParseStore:
                 result = self.compareStores(speetto, lotto645)
 
     def test(self):
-        with open("./test/sellerInfo645Result_강남구_Result_.json","r") as file:
+        with open("./test/sellerInfo645Result_강동구_Result_.json","r") as file:
             lotto645 = json.load(file)
-        with open("./test/sellerInfoPrintResult_강남구_Result_.json","r") as file:
+        with open("./test/sellerInfoPrintResult_강동구_Result_.json","r") as file:
             speetto = json.load(file)
         
         storeDataes = self.compareStores(speetto, lotto645)

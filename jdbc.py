@@ -31,6 +31,8 @@ def execute(query, selectFlag=False):
     """
     result = None
     config = _get_config_data()
+    if config == None:
+        raise Exception("[ERROR] can't find yaml file")
     try:
         conn = connect(jclassname=config["jclassname"],
                                url=config["url"],
