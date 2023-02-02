@@ -78,7 +78,7 @@ address_map = {
             "안산시 상록구","안성시","안양시 동안구","안양시 만안구","양주시","양평군","여주시","연천군","오산시","용인시 기흥구","용인시 수지구","용인시 처인구",
             "의왕시","의정부시","이천시","파주시","평택시","포천시","하남시","화성시"],
     "부산" : ["강서구","금정구","기장군","남구","동구","동래구","부산진구","북구","사상구","사하구","서구","수영구","연제구","영도구","중구","해운대구"],
-    "대구" : ["남구","달서구","달성군","대덕구","동구","북구","서구","수성구","유성구","중구"],
+    "대구" : ["남구","달서구","달성군","동구","북구","서구","수성구","중구"],
     "인천" : ["강화군","계양구","남동구","동구","미추홀구","부평구","서구","연수구","옹진군","중구"],
     "대전" : ["대덕구","동구","서구","유성구","중구"],
     "울산" : ["남구","동구","북구","울주군","중구"],
@@ -223,7 +223,7 @@ class ParseStore:
         if "LONGITUDE" in storeData.keys():
             #lotto645
             storeInfo.storeName = self._remove_special_symbol(storeData["FIRMNM"])
-            storeInfo.storeAddress = storeData["BPLCDORODTLADRES"]
+            storeInfo.storeAddress = self._remove_special_symbol(storeData["BPLCDORODTLADRES"])
             storeInfo.storeLatitude = str(storeData["LATITUDE"])
             storeInfo.storeLongitude = str(storeData["LONGITUDE"])
             storeInfo.storeBizNo = None
@@ -245,7 +245,15 @@ class ParseStore:
             address.append(storeData["BPLCLOCPLC3"])
             address.append(storeData["BPLCLOCPLC4"])
             storeInfo.storeName = self._remove_special_symbol(storeData["SHOP_NM"])
-            storeInfo.storeAddress = " ".join(address)
+            try:
+                if None in address:
+                    for i in address:
+                        if i is None:
+                            address.remove(i)
+                storeInfo.storeAddress = self._remove_special_symbol(" ".join(address))
+            except Exception as e:
+                print(f"ERROR storeData: {storeData}")
+                raise e
             storeInfo.storeLatitude = str(storeData["ADDR_LAT"])
             storeInfo.storeLongitude = str(storeData["ADDR_LOT"])
             storeInfo.storeBizNo = storeData["BIZ_NO"]
@@ -283,12 +291,16 @@ class ParseStore:
         lottoType.lottoCode = ltype
         lottoType.lottoName = name
         return lottoType
-        
+
+    def _escape_query_string(self, value:str):
+        if "'" in value:
+            value = value.replace("'", "''")
+        return value
+
     def save_store_data(self, storeDataes):
         key = list()
         value = list()
         for data in storeDataes:
-            print(data)
             key = []
             value = []
             data_dict = data.__dict__
@@ -298,7 +310,7 @@ class ParseStore:
                 key.append(k)
                 if v == None:
                     v = "NULL"
-                value.append(v)
+                value.append(self._escape_query_string(v))
             columnName = ",".join(key)
             columnValues = ",".join("'{}'".format(i) for i in value)
             jdbc.execute(f"insert into store({columnName}) values({columnValues});")
@@ -365,28 +377,36 @@ class ParseStore:
         for i in range(20):
             response = session.request("POST",url,headers=headers, data=postData, params=param)
             jsonData = response.json()
-
-            if validateInfo is not None:
-                if "SHOP_NM" in jsonData["arr"][0].keys():
-                    if validateInfo == jsonData["arr"][0]["SHOP_NM"]:
-                        break
+            # with open("log.log", "a") as f:
+                # f.write(f"[{sido}][{gugun}] nowPage: {postData['nowPage']}, query string: {param['method']}\n")
+            try:
+                if validateInfo is not None:
+                    if "SHOP_NM" in jsonData["arr"][0].keys():
+                        if validateInfo == jsonData["arr"][0]["SHOP_NM"]:
+                            break
+                        else:
+                            validateInfo = jsonData["arr"][0]["SHOP_NM"]
                     else:
-                        validateInfo = jsonData["arr"][0]["SHOP_NM"]
+                        if validateInfo == jsonData["arr"][0]["FIRMNM"]:
+                            break
+                        else:
+                            validateInfo = jsonData["arr"][0]["FIRMNM"]
                 else:
-                    if validateInfo == jsonData["arr"][0]["FIRMNM"]:
+                    if len(jsonData["arr"]) == 0:
                         break
+                    if "SHOP_NM" in jsonData["arr"][0].keys():
+                        validateInfo = jsonData["arr"][0]["SHOP_NM"]
                     else:
                         validateInfo = jsonData["arr"][0]["FIRMNM"]
-            else:
-                if "SHOP_NM" in jsonData["arr"][0].keys():
-                    validateInfo = jsonData["arr"][0]["SHOP_NM"]
-                else:
-                    validateInfo = jsonData["arr"][0]["FIRMNM"]
-            
-            postData["nowPage"] = str(int(postData["nowPage"]) + 1)
-            for i in jsonData["arr"]:
-                result.append(i)
 
+                postData["nowPage"] = str(int(postData["nowPage"]) + 1)
+                for i in jsonData["arr"]:
+                    result.append(i)
+            except Exception as e:
+                with open(f"./test/{gugun}_{queryString['method']}_{i}.json","w") as f:
+                    print(jsonData)
+                    f.write(json.dumps(jsonData))
+                raise e
         return result
         
     def getStoreData(self):
@@ -396,14 +416,6 @@ class ParseStore:
             for gugun in address_map[key]:
                 speetto = self.parseStoreInfo(url, gugun, sido, {"method":"sellerInfoPrintResult"})
                 lotto645 = self.parseStoreInfo(url, gugun, sido, {"method":"sellerInfo645Result"})
-                result = self.compareStores(speetto, lotto645)
-
-    def test(self):
-        with open("./test/sellerInfo645Result_강동구_Result_.json","r") as file:
-            lotto645 = json.load(file)
-        with open("./test/sellerInfoPrintResult_강동구_Result_.json","r") as file:
-            speetto = json.load(file)
-        
-        storeDataes = self.compareStores(speetto, lotto645)
-        self.save_store_data(storeDataes)
+                storeDataes = self.compareStores(speetto, lotto645)
+                self.save_store_data(storeDataes)
         

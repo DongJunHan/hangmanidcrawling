@@ -1,4 +1,5 @@
-from jaydebeapi import connect
+# from jaydebeapi import connect
+import pymysql
 import yaml
 import os
 
@@ -30,20 +31,33 @@ def execute(query, selectFlag=False):
             list
     """
     result = None
+    cursor = None
+    conn = None
     config = _get_config_data()
     if config == None:
         raise Exception("[ERROR] can't find yaml file")
     try:
-        conn = connect(jclassname=config["jclassname"],
-                               url=config["url"],
-                               driver_args=[config["username"], config["password"]],jars=[config["dbjarpath"]])
+        # conn = connect(jclassname=config["jclassname"],
+                            #   url=config["url"],
+                            #   driver_args=[config["username"], config["password"]],jars=[config["dbjarpath"]])
+        conn = pymysql.connect(
+	        user=config["username"],
+	        password=config["password"],
+	        host=config["host"],
+	        port=config["port"],
+	        database=config["database"],
+            charset=config["charset"],
+            autocommit=False)
         cursor = conn.cursor()
         cursor.execute(query)
         if selectFlag:
             result = _convert_to_schema(cursor)
+        conn.commit()
     except Exception as e:
         raise e
     finally:
-        cursor.close()
-        conn.close()
+        if cursor != None:
+            cursor.close()
+        if conn != None:
+            conn.close()
     return result
