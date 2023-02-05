@@ -116,14 +116,17 @@ from html.parser import HTMLParser
 
 """
 class WinHTMLParser(HTMLParser):
-    is_group_content = False
-    first_result = []
-    second_result = []
-    first_win = False
-    second_win = False
     def __init__(self):
         HTMLParser.__init__(self)
         self.is_group_content = False
+        self.firstResult = []
+        self.secondResult = []
+        self.first_win = False
+        self.second_win = False
+    def get_first_result(self):
+        return self.firstResult
+    def get_second_result(self):
+        return self.secondResult
     def handle_starttag(self, tag, attrs):
         if tag == "div":
             for i in attrs:
@@ -144,12 +147,12 @@ class WinHTMLParser(HTMLParser):
                 self.first_win = False
                 self.second_win = True
                 return
-            data = data.replace("\n","").replace("\t","").replace(" ","")
+            data = data.replace("\n","").replace("\t","").replace(" ","").replace("\r","")
             if len(data) != 0:
                 if self.first_win:
-                    self.first_result.append(data)
+                    self.firstResult.append(data)
                 elif self.second_win:
-                    self.second_result.append(data)
+                    self.secondResult.append(data)
 class Utils:
     def get_current_time():
         """
@@ -501,18 +504,19 @@ class WinParseException(Exception):
         return self.value
 
 class WinInfo:
-    """
-        1등,2등 당첨지 파싱
-    """
-    lottoTypes = {
-            "lotto645":"L645",
-            "annual":"L720",
-            "speetto500":"SP500",
-            "speetto1000":"SP1000",
-            "speetto2000":"SP2000"
-        }
-    first_win_info = []
-    second_win_info = []
+    def __init__(self):
+        """
+            1등,2등 당첨지 파싱
+        """
+        self.lottoTypes = {
+                "lotto645":"L645",
+                "annual":"L720",
+                "speetto500":"SP500",
+                "speetto1000":"SP1000",
+                "speetto2000":"SP2000"
+            }
+        self.first_win_info = []
+        self.second_win_info = []
 
 
     def _find_max_round(self, session, url, headers, postData, param):
@@ -533,7 +537,7 @@ class WinInfo:
             if "drwNo" not in restxt:
                 raise WinParseException("회차 파싱 오류: can't find 'drwNo'")
             
-            p = re.compile("(\<option value=\"[\d]+\"\>)(.*?)(\<\/option\>)")
+            p = re.compile("(\<option value=\"[\d]+\" selected\>)(.*?)(\<\/option\>)")
             m = p.findall(restxt)
             maxRound = m[0][1]
 
@@ -547,31 +551,54 @@ class WinInfo:
                 f.write(f"{restxt}")
         return maxRound
 
-    def _get_first_win_info(self, first_list):
-        if "조회결과가없습니다" in first_list[9]:
+    def _get_first_win_info(self, first_list, lotto_type):
+        lottoFlag = False
+        if lotto_type == "L645":
+            lottoFlag = True
+        if "조회결과가없습니다." in first_list:
             return None
         store = {}
-        keys = [first_list[4], first_list[5],first_list[6], first_list[7],first_list[8]]
-        i = 8
+        if lottoFlag:
+            keys = [first_list[1], first_list[2], first_list[3], first_list[4], first_list[5]]
+        else:
+            keys = [first_list[1], first_list[2], first_list[3]]
+        i = len(keys)
         while True:
-            if len(first_list) <= i:
+            if len(first_list) <= i+1:
                 break
             for k in keys:
                 i += 1
                 store[k] = first_list[i]
+            if len(first_list) > i+1 and  "배출점" in first_list[i+1]:
+                i += 1
             self.first_win_info.append(store)
-    def _get_second_win_info(self, second_list):
-        if "조회결과가없습니다" in second_list[9]:
+
+    def _get_second_win_info(self, second_list, lotto_type):
+        lottoFlag = False
+        """
+            ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
+            ['상호명,소재지,위치등스피또5001등배출점안내', '번호', '상호명', '소재지', '1', 'CU사상서부', '부산사상구사상로211번길121층']
+        """
+        if lotto_type == "L645":
+            lottoFlag = True
+        if "조회결과가없습니다." in second_list:
             return None
         store = {}
-        keys = [second_list[4], second_list[5],second_list[6], second_list[7],second_list[8]]
-        i = 8
+        if lottoFlag:
+            keys = [second_list[1], second_list[2], second_list[3], second_list[4]]#, second_list[5]]
+        else:
+            keys = [second_list[1], second_list[2], second_list[3]]
+        i = len(keys)
         while True:
-            if len(second_list) <= i:
+            if len(second_list) <= i+1:
                 break
             for k in keys:
                 i += 1
                 store[k] = second_list[i]
+            if len(second_list) <= i+1:
+                break
+            if len(second_list) > i+1 and "배출점" in second_list[i+1]:
+                i += 1
             self.second_win_info.append(store)
     #method=topStore&pageGubun=L645
     def _parseAllWinInfoByArea(self, url, sido, sigugun, queryString):
@@ -591,8 +618,10 @@ class WinInfo:
 
         maxRound = None
         headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
             "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
             "Accept-Encoding" : "gzip, deflate, br",
+            "Accept-Language" : "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "User-Agent" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
         }
         param = {}
@@ -607,20 +636,21 @@ class WinInfo:
             "gameNo": "5133",
             "drwNo":"",
             "schKey": "area",
-            "schVal": str(sido.encode('euc-kr'),'euc-kr')+" "+str(sigugun.encode('euc-kr'),'euc-kr')
+            "schVal": (sido+" "+sigugun).encode('euc-kr')
         }
         
         session = requests.Session()
-        session.verify = "FidderRootCertificate.crt"
+        # session.verify = "FidderRootCertificate.crt"
         if maxRound is None:
             maxRound = self._find_max_round(session, url, headers, postData, param)
         try:
-            for no in range(1, int(maxRound)+1):
+            for no in range(264, int(maxRound)+1):
                 postData["drwNo"] = str(no)
                 duplicateFirst = None
                 duplicateSecond = None
-                breakCount = 0
+                postData['nowPage'] = "1"
                 for i in range(30):
+                    breakCount = 0
                     response = session.request("POST",url,headers=headers, data=postData, params=param)
                     restxt = response.text
                     #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
@@ -628,39 +658,43 @@ class WinInfo:
                     m = p.findall(restxt)
                     if m.__len__() == 2:
                         break
-                    with open(f"./test/{sido}_{sigugun}_{postData['nowPage']}_{postData['gameNo']}.html","w") as f:
-                        f.write(restxt)
                     htmlParser = WinHTMLParser()
                     htmlParser.feed(restxt)
-                    
+
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    print(htmlParser.first_result[9])
-                    if "조회결과가없습니다" in htmlParser.first_result[9]:
-                        print("first NO")
+                    if "조회결과가없습니다." in htmlParser.get_first_result():
                         breakCount += 1
                     else:
+                        if queryString["pageGubun"] == "L645":
+                            firstCompare = htmlParser.get_first_result()[6]
+                        else:
+                            firstCompare = htmlParser.get_first_result()[5]
+
                         if duplicateFirst:
-                            if duplicateFirst == htmlParser.first_result[10]:
+                            if duplicateFirst == firstCompare:
                                 breakCount += 1
                         else:
-                            duplicateFirst = htmlParser.first_result[10]
-                    print(htmlParser.second_result[9])
-                    if "조회결과가없습니다" in htmlParser.second_result[9]:
-                        print("second NO")
+                            duplicateFirst = firstCompare
+                        
+                    if "조회결과가없습니다." in htmlParser.secondResult:
                         breakCount += 1
                     else:
+                        if queryString["pageGubun"] == "L645":
+                            secondCompare = htmlParser.get_second_result()[6]
+                        else:
+                            secondCompare = htmlParser.get_second_result()[5]
+                        
                         if duplicateSecond:
-                            if duplicateSecond == htmlParser.second_result[10]:
+                            if duplicateSecond == secondCompare:
                                 breakCount += 1
                         else:
-                            duplicateSecond = htmlParser.second_result[10]
+                            duplicateSecond = secondCompare
                     
                     if breakCount == 2:
                         break
-                    breakCount = 0
 
-                    self._get_first_win_info(htmlParser.first_result)
-                    self._get_second_win_info(htmlParser.second_result)
+                    self._get_first_win_info(htmlParser.get_first_result(), queryString["pageGubun"])
+                    self._get_second_win_info(htmlParser.get_second_result(), queryString["pageGubun"])
 
                     postData["nowPage"] = str(int(postData["nowPage"]) + 1)
 
@@ -673,9 +707,26 @@ class WinInfo:
             queryString["pageGubun"] = value
             for sido in address_map.keys():
                 for sigugun in address_map[sido]:
-                    print(f"lottoType: {value}, sido: {sido}, sigugun: {sigugun}")
+                    # print(f"lottoType: {value}, sido: {sido}, sigugun: {sigugun}")
                     self._parseAllWinInfoByArea("https://dhlottery.co.kr/store.do" ,sido, sigugun, queryString)
 
         
-        print(self.first_win_info)
-        print(self.second_win_info)
+        # print(self.first_win_info)
+        # print(self.second_win_info)
+
+    def get_first_win_info(self):
+        return self.first_win_info
+
+    def get_second_win_info(self):
+        return self.second_win_info
+
+    def test(self):
+        queryString = {}
+        queryString["method"] = "topStore"
+        queryString["pageGubun"] = self.lottoTypes["lotto645"]
+        sido = "서울"
+        sigugun = "마포구"
+        url = "https://dhlottery.co.kr/store.do"
+        self._parseAllWinInfoByArea(url, sido, sigugun, queryString)
+        # print(self.first_win_info)
+        # print(self.second_win_info)
