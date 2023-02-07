@@ -2,6 +2,8 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 import uuid
+import html
+from save import jdbc
 from dto import hangmaniDTO
 class StoreInfoCompare:
 
@@ -176,10 +178,18 @@ class StoreInfoCompare:
             
             storeInfo.lottoHandle = lottoHandle
         return storeInfo
+    
+    def _compare_tel_num(self, originTelNum, compareTelNum):
+        if originTelNum == None or compareTelNum == None:
+            return False
+        if originTelNum == compareTelNum:
+            return True
+        return False
+
     def compareStores(self, originData, compareData, sido, sigugun):
         """
             로또645판매점과 연금복권/즉석복권 판매점이 겹치는 경우가 있기 때문에 두 곳에서 가져온 정보를
-            비교하여 같은 상점이라고 판단되면 연금복권/즉석복권의 데이터가 더 많기 때문에 연금복권/즉석복권
+            비교(위도/경도, 전화번호)하여 같은 상점이라고 판단되면 연금복권/즉석복권의 데이터가 더 많기 때문에 연금복권/즉석복권
             데이터를 넣는다.
             Args:
                 originData  : dict
@@ -196,11 +206,15 @@ class StoreInfoCompare:
             equalFlag = False
             for j in range(len(originData)):
                 settingData = originData
+                oriTelNum = originData[j]["TELEPHONE"]
                 oriTude = [originData[j]["ADDR_LAT"], originData[j]["ADDR_LOT"]] #latitude, longitude
                 oriTelNum = originData[j]["TELEPHONE"]
                 if self._compare_longitude_and_latitude(oriTude, comTude):
                         equalFlag = True
                         break
+                if self._compare_tel_num(oriTelNum, comTelNum):
+                    equalFlag = True
+                    break
                 # if (comTelNum == None) or (oriTelNum == None):
                     # if self._compare_longitude_and_latitude(oriTude, comTude):
                         # equalFlag = True
@@ -214,11 +228,32 @@ class StoreInfoCompare:
             if equalFlag == False:
                 store = self._setting_storeinfo_object(compareData[i], sido, sigugun)
                 result.append(store)
-                # print(store.__str__())
-                #try save lotto645 data
-                pass
         for data in originData:
             store = self._setting_storeinfo_object(data, sido, sigugun)
             result.append(store)
-            # print(store.__str__())
         return result
+
+
+class WinHistoryInfoCompare:
+    def compareWinHistory(self, win_history_info:dict):
+        """
+            Args:
+                lotto_type: str
+                win_history_info: dict
+                {'lotto64' : {'sido sigugun' : [{'번호':'1','상호명':'','구분':'','소재지':'','위치보기':'','round':''}]}}
+            Returns:
+                None
+        """
+        selectFlag = True
+        for lottoType, value in win_history_info.items():
+            lottoid = jdbc.execute(f"select lottoid from lotto_type where lottoname='{lottoType}'", selectFlag)[0]["lottoid"]
+            print(f"type: {type(lottoid)}, velue: {lottoid}")
+            for sido_sigugun, v in value.items():
+                address = sido_sigugun.split(" ")
+                for data in v:
+                    queryResult = jdbc.execute(
+                    f"select storeuuid, storename, storeaddress from store where storesido='{address[0]}' and storesigugun='{address[1]}' and storename='{data['상호명']}';",
+                    selectFlag)
+                    print(queryResult)
+            # for i in value:
+                
