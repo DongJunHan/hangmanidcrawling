@@ -76,8 +76,8 @@ class WinInfo:
                 "speetto1000":"SP1000",
                 "speetto2000":"SP2000"
             }
-        self.first_win_info = []
-        self.second_win_info = []
+        self.first_win_info = {}
+        self.second_win_info = {}
         self.address_map = util.Variable().address_map
 
 
@@ -113,12 +113,12 @@ class WinInfo:
                 f.write(f"{restxt}")
         return maxRound
 
-    def _get_first_win_info(self, first_list, lotto_type):
+    def _get_first_win_info(self, first_list, lotto_type, lotto_round, result:list):
         lottoFlag = False
         if lotto_type == "L645":
             lottoFlag = True
         if "조회결과가없습니다." in first_list:
-            return None
+            return result
         store = {}
         if lottoFlag:
             keys = [first_list[1], first_list[2], first_list[3], first_list[4], first_list[5]]
@@ -133,9 +133,10 @@ class WinInfo:
                 store[k] = first_list[i]
             if len(first_list) > i+1 and  "배출점" in first_list[i+1]:
                 i += 1
-            self.first_win_info.append(store)
-
-    def _get_second_win_info(self, second_list, lotto_type):
+            store["round"] = lotto_round
+            result.append(store)
+        return result
+    def _get_second_win_info(self, second_list, lotto_type, lotto_round, result:list):
         lottoFlag = False
         """
             ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
@@ -144,7 +145,7 @@ class WinInfo:
         if lotto_type == "L645":
             lottoFlag = True
         if "조회결과가없습니다." in second_list:
-            return None
+            return result
         store = {}
         if lottoFlag:
             keys = [second_list[1], second_list[2], second_list[3], second_list[4]]#, second_list[5]]
@@ -161,7 +162,9 @@ class WinInfo:
                 break
             if len(second_list) > i+1 and "배출점" in second_list[i+1]:
                 i += 1
-            self.second_win_info.append(store)
+            store["round"] = lotto_round
+            result.append(store)
+        return result
     #method=topStore&pageGubun=L645
     def _parseAllWinInfoByArea(self, url, sido, sigugun, queryString):
         """
@@ -206,7 +209,9 @@ class WinInfo:
         if maxRound is None:
             maxRound = self._find_max_round(session, url, headers, postData, param)
         try:
-            for no in range(264, int(maxRound)+1):
+            firstHistory = []
+            secondHistory = []
+            for no in range(1, int(maxRound)+1):
                 postData["drwNo"] = str(no)
                 duplicateFirst = None
                 duplicateSecond = None
@@ -255,15 +260,18 @@ class WinInfo:
                     if breakCount == 2:
                         break
 
-                    self._get_first_win_info(htmlParser.get_first_result(), queryString["pageGubun"])
-                    self._get_second_win_info(htmlParser.get_second_result(), queryString["pageGubun"])
+                    firstHistory = self._get_first_win_info(htmlParser.get_first_result(), queryString["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self._get_second_win_info(htmlParser.get_second_result(), queryString["pageGubun"], postData["drwNo"], secondHistory)
 
                     postData["nowPage"] = str(int(postData["nowPage"]) + 1)
-
+            self.first_win_info[sido+" "+ sigugun] = firstHistory
+            self.second_win_info[sido+" "+ sigugun] = secondHistory
         except Exception as e:
             raise e
     def getWinInfo(self):
         queryString = {}
+        firstResult = {}
+        secondResult = {}
         queryString["method"] = "topStore"
         for key, value in self.lottoTypes.items():
             queryString["pageGubun"] = value
@@ -271,24 +279,17 @@ class WinInfo:
                 for sigugun in self.address_map[sido]:
                     # print(f"lottoType: {value}, sido: {sido}, sigugun: {sigugun}")
                     self._parseAllWinInfoByArea("https://dhlottery.co.kr/store.do" ,sido, sigugun, queryString)
-
+            firstResult[key] = self.first_win_info
+            secondResult[key] = self.second_win_info
+            self.first_win_info.clear()
+            self.second_win_info.clear()
+        return firstResult, secondResult
         
         # print(self.first_win_info)
         # print(self.second_win_info)
 
-    def get_first_win_info(self):
-        return self.first_win_info
+    # def get_first_win_info(self):
+    #     return self.first_win_info
 
-    def get_second_win_info(self):
-        return self.second_win_info
-
-    def test(self):
-        queryString = {}
-        queryString["method"] = "topStore"
-        queryString["pageGubun"] = self.lottoTypes["lotto645"]
-        sido = "서울"
-        sigugun = "마포구"
-        url = "https://dhlottery.co.kr/store.do"
-        self._parseAllWinInfoByArea(url, sido, sigugun, queryString)
-        print(self.first_win_info)
-        print(self.second_win_info)
+    # def get_second_win_info(self):
+    #     return self.second_win_info
