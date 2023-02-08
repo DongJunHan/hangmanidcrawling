@@ -47,8 +47,8 @@ class WinHTMLParser(HTMLParser):
                 self.first_win = False
                 self.second_win = True
                 return
-            data = data.replace("\n","").replace("\t","").replace(" ","").replace("\r","")
-            if len(data) != 0:
+            data = data.replace("\n","").replace("\t","").replace("\r","")
+            if len(data.replace(" ","")) > 0 and len(data) != 0:
                 if self.first_win:
                     self.firstResult.append(data)
                 elif self.second_win:
@@ -113,17 +113,23 @@ class WinInfo:
                 f.write(f"{restxt}")
         return maxRound
 
-    def _get_first_win_info(self, first_list, lotto_type, lotto_round, result:list):
+    def _get_first_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
         lottoFlag = False
         if lotto_type == "L645":
             lottoFlag = True
-        if "조회결과가없습니다." in first_list:
+        if "조회 결과가 없습니다." in first_list:
             return result
         store = {}
-        if lottoFlag:
-            keys = [first_list[1], first_list[2], first_list[3], first_list[4], first_list[5]]
-        else:
-            keys = [first_list[1], first_list[2], first_list[3]]
+        for i in range(historyKey):
+            if historyKey[i] == "위치보기":
+                store["위도"] = ""
+                store["경도"] = ""
+            else:
+                store[historyKey[i]] = ""
+        # if lottoFlag:
+        #     keys = [first_list[1], first_list[2], first_list[3], first_list[4], first_list[5]]
+        # else:
+        #     keys = [first_list[1], first_list[2], first_list[3]]
         i = len(keys)
         while True:
             if len(first_list) <= i+1:
@@ -136,7 +142,7 @@ class WinInfo:
             store["round"] = lotto_round
             result.append(store)
         return result
-    def _get_second_win_info(self, second_list, lotto_type, lotto_round, result:list):
+    def _get_second_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
         lottoFlag = False
         """
             ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
@@ -144,13 +150,19 @@ class WinInfo:
         """
         if lotto_type == "L645":
             lottoFlag = True
-        if "조회결과가없습니다." in second_list:
+        if "조회 결과가 없습니다." in second_list:
             return result
         store = {}
-        if lottoFlag:
-            keys = [second_list[1], second_list[2], second_list[3], second_list[4]]#, second_list[5]]
-        else:
-            keys = [second_list[1], second_list[2], second_list[3]]
+        for i in range(historyKey):
+            if historyKey[i] == "위치보기":
+                store["위도"] = ""
+                store["경도"] = ""
+            else:
+                store[historyKey[i]] = ""
+        # if lottoFlag:
+        #     keys = [second_list[1], second_list[2], second_list[3], second_list[4]]#, second_list[5]]
+        # else:
+        #     keys = [second_list[1], second_list[2], second_list[3]]
         i = len(keys)
         while True:
             if len(second_list) <= i+1:
@@ -165,6 +177,47 @@ class WinInfo:
             store["round"] = lotto_round
             result.append(store)
         return result
+    
+    def _parse_win_history_data(self, response):
+        """
+            Args:
+                response: str 응답
+            Returns:
+                key  : dict
+                tdTeg: dict
+        """
+        p = re.compile("(?<=\<table class\=\"tbl_data tbl_data_col\">)(.*?)(?=<\/tbody>)",re.DOTALL)
+        m = p.findall(response)
+        trTag = []
+        for i in m:
+            i = i.replace("\n","").replace("\t","").replace("\r","")
+            #parse tr tag
+            p = re.compile("(?<=\<tr>)(.*?)(?=<\/tr>)")
+            tr = p.findall(i)
+            trTag.append(tr)
+        key = {}
+        tdTag = {}
+        #parse th tag
+        for i in range(len(trTag)):
+            tdTag[str(i+1) + "st"] = {}
+            for j in range(len(trTag[i])):
+                p = re.compile("(?<=\<th scope\=\"col\">)(.*?)(?=<\/th>)")
+                if p.search(trTag[i][j]):
+                    key[str(i+1) + "st"] = p.findall(trTag[i][j])
+                else:
+                    #parse td tag
+                    p = re.compile("(?<=\<td>)(.*?)(?=<\/td>)")
+                    tdTag[str(i+1) + "st"][j] = p.findall(trTag[i][j])
+        
+        #save data
+        for k1,v1 in tdTag.items():
+            for k, v in v1.items():
+                p = re.compile("(?<=\<a href=\"\#\" class=\"btn_search\" onClick=\"javascript\:showMapPage\(\\')(.*?)(?=\\'\)\")")
+                for i in range(len(v)):
+                    if p.search(v[i]):
+                        tdTag[k1][k][i] = p.findall(v[i])[0]
+        return key, tdTag
+
     #method=topStore&pageGubun=L645
     def _parseAllWinInfoByArea(self, url, sido, sigugun, queryString):
         """
@@ -225,17 +278,14 @@ class WinInfo:
                     m = p.findall(restxt)
                     if m.__len__() == 2:
                         break
-                    htmlParser = WinHTMLParser()
-                    htmlParser.feed(restxt)
+                    #TODO re 정규식으로 수정
+                    winHistoryKey, winHistoryValue = self._parse_win_history_data(restxt)
 
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    if "조회결과가없습니다." in htmlParser.get_first_result():
+                    if len(winHistoryValue["1st"][1]) == 0:
                         breakCount += 1
                     else:
-                        if queryString["pageGubun"] == "L645":
-                            firstCompare = htmlParser.get_first_result()[6]
-                        else:
-                            firstCompare = htmlParser.get_first_result()[5]
+                        firstCompare = winHistoryValue["1st"][1][1]
 
                         if duplicateFirst:
                             if duplicateFirst == firstCompare:
@@ -243,13 +293,10 @@ class WinInfo:
                         else:
                             duplicateFirst = firstCompare
                         
-                    if "조회결과가없습니다." in htmlParser.secondResult:
+                    if len(winHistoryValue["2st"][1]) == 0:
                         breakCount += 1
                     else:
-                        if queryString["pageGubun"] == "L645":
-                            secondCompare = htmlParser.get_second_result()[6]
-                        else:
-                            secondCompare = htmlParser.get_second_result()[5]
+                        secondCompare = winHistoryValue["2st"][1][1]
                         
                         if duplicateSecond:
                             if duplicateSecond == secondCompare:
@@ -260,8 +307,8 @@ class WinInfo:
                     if breakCount == 2:
                         break
 
-                    firstHistory = self._get_first_win_info(htmlParser.get_first_result(), queryString["pageGubun"], postData["drwNo"], firstHistory)
-                    secondHistory = self._get_second_win_info(htmlParser.get_second_result(), queryString["pageGubun"], postData["drwNo"], secondHistory)
+                    firstHistory = self._get_first_win_info(winHistoryKey["1st"], winHistoryValue["1st"], queryString["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self._get_second_win_info(winHistoryKey["2st"], winHistoryValue["2st"], queryString["pageGubun"], postData["drwNo"], secondHistory)
 
                     postData["nowPage"] = str(int(postData["nowPage"]) + 1)
             self.first_win_info[sido+" "+ sigugun] = firstHistory
