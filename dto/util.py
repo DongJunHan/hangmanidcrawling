@@ -31,6 +31,7 @@ class Variable:
     }
 
 from datetime import datetime
+import time
 class Utils:
     def get_current_time():
         """
@@ -45,9 +46,9 @@ class Utils:
         date = current.strftime("%y%m%d")
         return date,time
     
-    def retry_wrapper(func):
+    def retry_wrapper(self,func):
         def retry_func(*args, **kwargs):
-            max_count = 10
+            max_count = 5
             sleep_time = 0.5
             count = 0
             while True:

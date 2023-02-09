@@ -79,6 +79,8 @@ class WinInfo:
         self.first_win_info = {}
         self.second_win_info = {}
         self.address_map = util.Variable().address_map
+        self.util = util.Utils()
+        self._get_latitude_longitude = self.util.retry_wrapper(self._get_latitude_longitude)
 
 
     def _find_max_round(self, session, url, headers, postData, param):
@@ -104,8 +106,7 @@ class WinInfo:
             maxRound = m[0][1]
 
         except WinParseException as e:
-            u = Utils()
-            date, time = u.get_current_time()
+            date, time = self.util.get_current_time()
             with open(f"./log/error_log.log","a") as f:
                 f.write(f"[{time}] schVal: {postData['schVal']}\n")
                 f.write(f"[{time}] nowPage: {postData['nowPage']}\n")
@@ -113,68 +114,86 @@ class WinInfo:
                 f.write(f"{restxt}")
         return maxRound
 
+    def _get_latitude_longitude(self, winRank, historyValue):
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "Accept-Encoding" : "gzip, deflate, br",
+            "Accept-Language" : "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "User-Agent" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+            "Referer": "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
+        }
+        session = requests.Session()
+        # session.verify = "FidderRootCertificate.crt"
+        latp = re.compile("(?<=\<input type=\"hidden\" name=\"lat\" value = \")(.*?)(?=\">)")
+        lonp = re.compile("(?<=\<input type=\"hidden\" name=\"lon\" value = \")(.*?)(?=\">)")
+        for num, values in historyValue.items():
+            if winRank == 1:
+                value = values[4]
+            elif winRank == 2:
+                value = values[3]
+            queryParam = f"method=topStoreLocation&gbn=lotto&rtlrId={value}"
+            url = f"https://dhlottery.co.kr/store.do?{queryParam}"
+            response = session.request("GET", url, headers=headers)
+            restxt = response.text
+
+            if latp.search(restxt) == None:
+                raise WinParseException(f"위치보기 위도 파싱 실패=> {values}")
+            
+            if lonp.search(restxt) == None:
+                raise WinParseException(f"위치보기 경도 파싱 실패=> {values}")
+            
+            if len(latp.findall(restxt)[0]) == 0:
+                raise WinParseException(f"위치보기 위도 결과 값 없음=> {values}")
+            if len(lonp.findall(restxt)[0]) == 0:
+                raise WinParseException(f"위치보기 경도 결과 값 없음=> {values}")
+            
+            historyValue[num][3] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
+        session.close()
+        return historyValue
+
+
     def _get_first_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
-        lottoFlag = False
-        if lotto_type == "L645":
-            lottoFlag = True
-        if "조회 결과가 없습니다." in first_list:
+        """
+            당첨결과에서 위도,경도 데이터는 lotto645밖에 없으므로 lotto645에서만 위도/경도를 구한다.
+            Args:
+                historyKey: list
+                historyValue: dict
+                lotto_type: str
+                lotto_round: str
+                result: list
+            Return:
+                result: list
+        """
+        if len(historyValue) == 0 or len(historyValue[1]) == 0:
             return result
+        if lotto_type == "L645":
+            historyValue = self._get_latitude_longitude(1, historyValue)
         store = {}
-        for i in range(historyKey):
-            if historyKey[i] == "위치보기":
-                store["위도"] = ""
-                store["경도"] = ""
-            else:
-                store[historyKey[i]] = ""
-        # if lottoFlag:
-        #     keys = [first_list[1], first_list[2], first_list[3], first_list[4], first_list[5]]
-        # else:
-        #     keys = [first_list[1], first_list[2], first_list[3]]
-        i = len(keys)
-        while True:
-            if len(first_list) <= i+1:
-                break
-            for k in keys:
-                i += 1
-                store[k] = first_list[i]
-            if len(first_list) > i+1 and  "배출점" in first_list[i+1]:
-                i += 1
-            store["round"] = lotto_round
+        for key, value in historyValue.items():
+            for i in range(len(value)):
+                if historyKey[i] == "위치보기":
+                    store["위도경도"] = value[i]
+                else:
+                    store[historyKey[i]] = value[i]
             result.append(store)
         return result
     def _get_second_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
-        lottoFlag = False
         """
             ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
             ['상호명,소재지,위치등스피또5001등배출점안내', '번호', '상호명', '소재지', '1', 'CU사상서부', '부산사상구사상로211번길121층']
         """
-        if lotto_type == "L645":
-            lottoFlag = True
-        if "조회 결과가 없습니다." in second_list:
+        if len(historyValue) == 0 or len(historyValue[1]) == 0:
             return result
+        if lotto_type == "L645":
+            historyValue = self._get_latitude_longitude(2, historyValue)
         store = {}
-        for i in range(historyKey):
-            if historyKey[i] == "위치보기":
-                store["위도"] = ""
-                store["경도"] = ""
-            else:
-                store[historyKey[i]] = ""
-        # if lottoFlag:
-        #     keys = [second_list[1], second_list[2], second_list[3], second_list[4]]#, second_list[5]]
-        # else:
-        #     keys = [second_list[1], second_list[2], second_list[3]]
-        i = len(keys)
-        while True:
-            if len(second_list) <= i+1:
-                break
-            for k in keys:
-                i += 1
-                store[k] = second_list[i]
-            if len(second_list) <= i+1:
-                break
-            if len(second_list) > i+1 and "배출점" in second_list[i+1]:
-                i += 1
-            store["round"] = lotto_round
+        for key, value in historyValue.items():
+            for i in range(len(value)):
+                if historyKey[i] == "위치보기":
+                    store["위도경도"] = value[i]
+                else:
+                    store[historyKey[i]] = value[i]
             result.append(store)
         return result
     

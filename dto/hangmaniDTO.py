@@ -4,28 +4,30 @@ from typing import List
 
 @dataclass(unsafe_hash=True)
 class LottoType:
-    lottoId        : str                                       #복권 PK
-    lottoCode      : str                                       #복권 종류 코드
+    lottoId        : int                                       #복권 PK
+    # lottoCode      : str                                       #복권 종류 코드
     lottoName      : str                                       #복권 이름
     def __init__(self):
         pass
 
 @dataclass(unsafe_hash=True)
 class LottoHandleList:
-    storeId        : str                                       #상점 ID PK값
+    storeUuid        : str                                       #상점 ID PK값
     lottoList      : list                                      #로또 리스트 DTO
     def __init__(self):
         pass
 
 @dataclass(unsafe_hash=True)
 class WinHistory:
-    storeId        : str                                       #상점 ID PK값
-    winRound       : int                                       #당첨 회차
-    winRank        : int                                       #당첨 등수
-    lottoType      : ClassVar[LottoType]                       #로또 리스트 DTO
-    def __init__(self):
-        pass
-
+    storeUuid        : str                                       #상점 ID PK값
+    winRound       : int                                         #당첨 회차
+    winRank        : int                                         #당첨 등수
+    lottoId        : int                                         #로또 리스트 DTO
+    def __init__(self, storeUuid = None, winRound = None, winRank = None, lottoId = None):
+        self.storeUuid = storeUuid
+        self.winRank = winRank
+        self.winRound = winRound
+        self.lottoId = lottoId
 @dataclass(unsafe_hash=True)
 class StoreInfo:
     storeUuid      : str                                       #상점 ID PK값
