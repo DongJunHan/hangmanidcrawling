@@ -44,3 +44,18 @@ class Utils:
         time = current.strftime("%H:%M:S")
         date = current.strftime("%y%m%d")
         return date,time
+    
+    def retry_wrapper(func):
+        def retry_func(*args, **kwargs):
+            max_count = 10
+            sleep_time = 0.5
+            count = 0
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    count += 1
+                    if count >= max_count:
+                        raise e
+                    time.sleep(sleep_time)
+        return retry_func
