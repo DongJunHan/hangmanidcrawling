@@ -147,8 +147,10 @@ class WinInfo:
                 raise WinParseException(f"위치보기 위도 결과 값 없음=> {values}")
             if len(lonp.findall(restxt)[0]) == 0:
                 raise WinParseException(f"위치보기 경도 결과 값 없음=> {values}")
-            
-            historyValue[num][3] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
+            if winRank == 1:
+                historyValue[num][4] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
+            elif winRank == 2:
+                historyValue[num][3] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
         session.close()
         return historyValue
 
@@ -176,6 +178,7 @@ class WinInfo:
                     store["위도경도"] = value[i]
                 else:
                     store[historyKey[i]] = value[i]
+            store["winRound"] = lotto_round
             result.append(store)
         return result
     def _get_second_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
@@ -194,6 +197,7 @@ class WinInfo:
                     store["위도경도"] = value[i]
                 else:
                     store[historyKey[i]] = value[i]
+            store["winRound"] = lotto_round
             result.append(store)
         return result
     
