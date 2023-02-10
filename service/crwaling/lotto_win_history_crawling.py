@@ -1,10 +1,10 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from html.parser import HTMLParser
 import re
 import requests
 import json
+import abc
 from dto import util, hangmaniDTO
 
 """
@@ -14,47 +14,6 @@ from dto import util, hangmaniDTO
     3. 당첨 결과 262회부터 파싱.
 
 """
-
-class WinHTMLParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.is_group_content = False
-        self.firstResult = []
-        self.secondResult = []
-        self.first_win = False
-        self.second_win = False
-    def get_first_result(self):
-        return self.firstResult
-    def get_second_result(self):
-        return self.secondResult
-    def handle_starttag(self, tag, attrs):
-        if tag == "div":
-            for i in attrs:
-                if i[0] == "class" and i[1] == "group_content":
-                    self.is_group_content = True
-    
-    def handle_endtag(self, tag):
-        if tag == "table":
-            self.is_group_content = False
-    
-    def handle_data(self, data):
-        if self.is_group_content == True:
-            if data == "1등 배출점":
-                self.first_win = True
-                self.second_win = False
-                return
-            if data == "2등 배출점":
-                self.first_win = False
-                self.second_win = True
-                return
-            data = data.replace("\n","").replace("\t","").replace("\r","")
-            if len(data.replace(" ","")) > 0 and len(data) != 0:
-                if self.first_win:
-                    self.firstResult.append(data)
-                elif self.second_win:
-                    self.secondResult.append(data)
-
-
 class WinParseException(Exception):
     #생성할때 value 값을 입력 받는다.
     def __init__(self, value):
@@ -64,7 +23,174 @@ class WinParseException(Exception):
     def __str__(self):
         return self.value
 
-class WinInfo:
+class WinHistoryByArea(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def parseWinHistory(self, session, url, headers, postData, queryParam:dict):
+        """
+            Args:
+                session   : requests.Session
+                url       : str
+                headers   : dict
+                postData  : dict
+                queryParam: dict
+            Return
+                firstList: list
+                secondList: List
+        """
+        raise NotImplemented
+
+class WinHistoryCurrentRoundByArea(WinHistoryByArea):
+    def __init__(self):
+        self.winUtil = WinInfoUtil()
+        # self.first_win_info = {}
+        # self.second_win_info = {}
+    
+    def parseWinHistory(self, session, url, headers, postData, queryParam):
+        """
+            Args:
+                session   : requests.Session
+                url       : str
+                headers   : dict
+                postData  : dict
+                queryParam: dict
+            Return
+                firstList: list
+                secondList: List
+        """
+        firstList = []
+        secondList = []
+        maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
+        try:
+            firstHistory = []
+            secondHistory = []
+            for no in range(int(maxRound), int(maxRound)+1):
+                postData["drwNo"] = str(no)
+                duplicateFirst = None
+                duplicateSecond = None
+                postData['nowPage'] = "1"
+                for i in range(30):
+                    breakCount = 0
+                    response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
+                    restxt = response.text
+                    #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
+                    p = re.compile("(\<td class=\"nodata\" colspan=\"[\d]+\"\>)(.*?)(\<\/td\>)")
+                    m = p.findall(restxt)
+                    if m.__len__() == 2:
+                        break
+                    winHistoryKey, winHistoryValue = self.winUtil.parse_win_history_data(restxt)
+
+                    #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
+                    if len(winHistoryValue["1st"][1]) == 0:
+                        breakCount += 1
+                    else:
+                        firstCompare = winHistoryValue["1st"][1][1]
+
+                        if duplicateFirst:
+                            if duplicateFirst == firstCompare:
+                                breakCount += 1
+                        else:
+                            duplicateFirst = firstCompare
+                        
+                    if len(winHistoryValue["2st"][1]) == 0:
+                        breakCount += 1
+                    else:
+                        secondCompare = winHistoryValue["2st"][1][1]
+                        
+                        if duplicateSecond:
+                            if duplicateSecond == secondCompare:
+                                breakCount += 1
+                        else:
+                            duplicateSecond = secondCompare
+                    
+                    if breakCount == 2:
+                        break
+
+                    firstHistory = self.winUtil.get_first_win_info(winHistoryKey["1st"], winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self.winUtil.get_second_win_info(winHistoryKey["2st"], winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
+
+                    postData["nowPage"] = str(int(postData["nowPage"]) + 1)
+            # self.first_win_info[sido+" "+ sigugun] = firstHistory
+            # self.second_win_info[sido+" "+ sigugun] = secondHistory
+        except Exception as e:
+            raise e   
+        return firstHistory, secondHistory
+class WinHistoryAllByArea(WinHistoryByArea):
+    def __init__(self):
+        self.winUtil = WinInfoUtil()
+        # self.first_win_info = {}
+        # self.second_win_info = {}
+    
+    #method=topStore&pageGubun=L645
+    def parseWinHistory(self, session, url, headers, postData, queryParam):
+        """
+            Args:
+                session   : requests.Session
+                url       : str
+                headers   : dict
+                postData  : dict
+                queryParam: dict
+            Return
+                firstList: list
+                secondList: List
+        """
+        firstList = []
+        secondList = []
+        maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
+        try:
+            firstHistory = []
+            secondHistory = []
+            for no in range(1, int(maxRound)+1):
+                postData["drwNo"] = str(no)
+                duplicateFirst = None
+                duplicateSecond = None
+                postData['nowPage'] = "1"
+                for i in range(30):
+                    breakCount = 0
+                    response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
+                    restxt = response.text
+                    #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
+                    p = re.compile("(\<td class=\"nodata\" colspan=\"[\d]+\"\>)(.*?)(\<\/td\>)")
+                    m = p.findall(restxt)
+                    if m.__len__() == 2:
+                        break
+                    winHistoryKey, winHistoryValue = self.winUtil.parse_win_history_data(restxt)
+
+                    #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
+                    if len(winHistoryValue["1st"][1]) == 0:
+                        breakCount += 1
+                    else:
+                        firstCompare = winHistoryValue["1st"][1][1]
+
+                        if duplicateFirst:
+                            if duplicateFirst == firstCompare:
+                                breakCount += 1
+                        else:
+                            duplicateFirst = firstCompare
+                        
+                    if len(winHistoryValue["2st"][1]) == 0:
+                        breakCount += 1
+                    else:
+                        secondCompare = winHistoryValue["2st"][1][1]
+                        
+                        if duplicateSecond:
+                            if duplicateSecond == secondCompare:
+                                breakCount += 1
+                        else:
+                            duplicateSecond = secondCompare
+                    
+                    if breakCount == 2:
+                        break
+
+                    firstHistory = self.winUtil.get_first_win_info(winHistoryKey["1st"], winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self.winUtil.get_second_win_info(winHistoryKey["2st"], winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
+
+                    postData["nowPage"] = str(int(postData["nowPage"]) + 1)
+            # self.first_win_info[sido+" "+ sigugun] = firstHistory
+            # self.second_win_info[sido+" "+ sigugun] = secondHistory
+        except Exception as e:
+            raise e   
+        return firstHistory, secondHistory
+class WinInfoUtil:
     def __init__(self):
         """
             1등,2등 당첨지 파싱
@@ -76,14 +202,12 @@ class WinInfo:
                 "speetto1000":"SP1000",
                 "speetto2000":"SP2000"
             }
-        self.first_win_info = {}
-        self.second_win_info = {}
         self.address_map = util.Variable().address_map
         self.util = util.Utils()
-        self._get_latitude_longitude = self.util.retry_wrapper(self._get_latitude_longitude)
+        self.get_latitude_longitude = self.util.retry_wrapper(self.get_latitude_longitude)
 
 
-    def _find_max_round(self, session, url, headers, postData, param):
+    def find_max_round(self, session, url, headers, postData, param):
         """
             Args:
                 session: requests.session
@@ -114,7 +238,7 @@ class WinInfo:
                 f.write(f"{restxt}")
         return maxRound
 
-    def _get_latitude_longitude(self, winRank, historyValue):
+    def get_latitude_longitude(self, winRank, historyValue):
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -155,7 +279,7 @@ class WinInfo:
         return historyValue
 
 
-    def _get_first_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
+    def get_first_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
         """
             당첨결과에서 위도,경도 데이터는 lotto645밖에 없으므로 lotto645에서만 위도/경도를 구한다.
             Args:
@@ -170,26 +294,7 @@ class WinInfo:
         if len(historyValue) == 0 or len(historyValue[1]) == 0:
             return result
         if lotto_type == "L645":
-            historyValue = self._get_latitude_longitude(1, historyValue)
-        store = {}
-        for key, value in historyValue.items():
-            for i in range(len(value)):
-                if historyKey[i] == "위치보기":
-                    store["위도경도"] = value[i]
-                else:
-                    store[historyKey[i]] = value[i]
-            store["winRound"] = lotto_round
-            result.append(store)
-        return result
-    def _get_second_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
-        """
-            ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
-            ['상호명,소재지,위치등스피또5001등배출점안내', '번호', '상호명', '소재지', '1', 'CU사상서부', '부산사상구사상로211번길121층']
-        """
-        if len(historyValue) == 0 or len(historyValue[1]) == 0:
-            return result
-        if lotto_type == "L645":
-            historyValue = self._get_latitude_longitude(2, historyValue)
+            historyValue = self.get_latitude_longitude(1, historyValue)
         store = {}
         for key, value in historyValue.items():
             for i in range(len(value)):
@@ -201,7 +306,27 @@ class WinInfo:
             result.append(store)
         return result
     
-    def _parse_win_history_data(self, response):
+    def get_second_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
+        """
+            ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
+            ['상호명,소재지,위치등스피또5001등배출점안내', '번호', '상호명', '소재지', '1', 'CU사상서부', '부산사상구사상로211번길121층']
+        """
+        if len(historyValue) == 0 or len(historyValue[1]) == 0:
+            return result
+        if lotto_type == "L645":
+            historyValue = self.get_latitude_longitude(2, historyValue)
+        store = {}
+        for key, value in historyValue.items():
+            for i in range(len(value)):
+                if historyKey[i] == "위치보기":
+                    store["위도경도"] = value[i]
+                else:
+                    store[historyKey[i]] = value[i]
+            store["winRound"] = lotto_round
+            result.append(store)
+        return result
+    
+    def parse_win_history_data(self, response):
         """
             Args:
                 response: str 응답
@@ -240,24 +365,8 @@ class WinInfo:
                     if p.search(v[i]):
                         tdTag[k1][k][i] = p.findall(v[i])[0]
         return key, tdTag
-
-    #method=topStore&pageGubun=L645
-    def _parseAllWinInfoByArea(self, url, sido, sigugun, queryString):
-        """
-            Args:
-                url : str
-                sido : str
-                sigugun: str
-                queryString: dict
-                maxRound: dict
-            Return
-                firstList: list
-                secondList: List
-        """
-        firstList = []
-        secondList = []
-
-        maxRound = None
+    
+    def get_win_history_header(self):
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -265,11 +374,9 @@ class WinInfo:
             "Accept-Language" : "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "User-Agent" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
         }
-        param = {}
-        if queryString is not None:
-            for key, value in queryString.items():
-                param[key] = value
-        
+        return headers
+    
+    def get_win_history_postdata(self, sido, sigugun):
         postData = {
             "method": "topStore",
             "nowPage": "1",
@@ -279,87 +386,9 @@ class WinInfo:
             "schKey": "area",
             "schVal": (sido+" "+sigugun).encode('euc-kr')
         }
-        
+        return postData
+    
+    def get_session(self):
         session = requests.Session()
         # session.verify = "FidderRootCertificate.crt"
-        if maxRound is None:
-            maxRound = self._find_max_round(session, url, headers, postData, param)
-        try:
-            firstHistory = []
-            secondHistory = []
-            for no in range(1, int(maxRound)+1):
-                postData["drwNo"] = str(no)
-                duplicateFirst = None
-                duplicateSecond = None
-                postData['nowPage'] = "1"
-                for i in range(30):
-                    breakCount = 0
-                    response = session.request("POST",url,headers=headers, data=postData, params=param)
-                    restxt = response.text
-                    #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
-                    p = re.compile("(\<td class=\"nodata\" colspan=\"[\d]+\"\>)(.*?)(\<\/td\>)")
-                    m = p.findall(restxt)
-                    if m.__len__() == 2:
-                        break
-                    #TODO re 정규식으로 수정
-                    winHistoryKey, winHistoryValue = self._parse_win_history_data(restxt)
-
-                    #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    if len(winHistoryValue["1st"][1]) == 0:
-                        breakCount += 1
-                    else:
-                        firstCompare = winHistoryValue["1st"][1][1]
-
-                        if duplicateFirst:
-                            if duplicateFirst == firstCompare:
-                                breakCount += 1
-                        else:
-                            duplicateFirst = firstCompare
-                        
-                    if len(winHistoryValue["2st"][1]) == 0:
-                        breakCount += 1
-                    else:
-                        secondCompare = winHistoryValue["2st"][1][1]
-                        
-                        if duplicateSecond:
-                            if duplicateSecond == secondCompare:
-                                breakCount += 1
-                        else:
-                            duplicateSecond = secondCompare
-                    
-                    if breakCount == 2:
-                        break
-
-                    firstHistory = self._get_first_win_info(winHistoryKey["1st"], winHistoryValue["1st"], queryString["pageGubun"], postData["drwNo"], firstHistory)
-                    secondHistory = self._get_second_win_info(winHistoryKey["2st"], winHistoryValue["2st"], queryString["pageGubun"], postData["drwNo"], secondHistory)
-
-                    postData["nowPage"] = str(int(postData["nowPage"]) + 1)
-            self.first_win_info[sido+" "+ sigugun] = firstHistory
-            self.second_win_info[sido+" "+ sigugun] = secondHistory
-        except Exception as e:
-            raise e
-    def getWinInfo(self):
-        queryString = {}
-        firstResult = {}
-        secondResult = {}
-        queryString["method"] = "topStore"
-        for key, value in self.lottoTypes.items():
-            queryString["pageGubun"] = value
-            for sido in self.address_map.keys():
-                for sigugun in self.address_map[sido]:
-                    # print(f"lottoType: {value}, sido: {sido}, sigugun: {sigugun}")
-                    self._parseAllWinInfoByArea("https://dhlottery.co.kr/store.do" ,sido, sigugun, queryString)
-            firstResult[key] = self.first_win_info
-            secondResult[key] = self.second_win_info
-            self.first_win_info.clear()
-            self.second_win_info.clear()
-        return firstResult, secondResult
-        
-        # print(self.first_win_info)
-        # print(self.second_win_info)
-
-    # def get_first_win_info(self):
-    #     return self.first_win_info
-
-    # def get_second_win_info(self):
-    #     return self.second_win_info
+        return session
