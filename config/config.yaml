@@ -1,6 +1,19 @@
-#jaydebeapi package paramaters
+#jaydebeapi package paramater
 jclassname: org.h2.Driver
+#jaydebeapi package paramater
 url : jdbc:h2:tcp://localhost/~/test
-username: sa
-password:
+#jaydebeapi package paramater
 dbjarpath: /Users/handongjun/Downloads/h2/bin/h2-1.4.200.jar
+#jaydebeapi, pymysql package paramater
+username: sa
+#jaydebeapi, pymysql package paramater
+password: 
+#pymysql package paramater
+host: 172.18.0.3
+#pymysql package paramater
+port: 3306
+#pymysql package paramater
+database: hangmani
+#pymysql package paramater
+charset: utf8
+
