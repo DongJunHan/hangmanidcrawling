@@ -16,7 +16,7 @@ import html
 import abc
 from dto import hangmaniDTO, util
 from compare import data_compare
-from save import DB_save
+from save import jdbc_config
 class StoreInfoByArea(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def parseStoreInfo(self, session, url, headers, postData, queryParam):

@@ -36,8 +36,6 @@ class WinHistoryImpl:
             firstSido.clear()
             secondSido.clear()
         
-        print(firstResult)
-        print(secondResult)
         return firstResult, secondResult
 
     def _parseData(self, session, url, headers, postData, queryParam):
