@@ -30,10 +30,15 @@ class TestWinInfo(unittest.TestCase):
     def test_query(self):
         with open("./win_history_노원.json") as f:
             a = json.load(f)
-            dictionary = {}
-            dictionary["lotto645"] = a
+            firstRankWinHistory = {}
+            firstRankWinHistory["lotto645"] = a
+        with open("./win_history_노원_2.json") as f:
+            a = json.load(f)
+            secondRankWinHistory = {}
+            secondRankWinHistory["lotto645"] = a
+
+        lotto_config.LottoConfig().compareAndSaveWinHistory(firstRankWinHistory, secondRankWinHistory)
         
-        result = self.dataCompare.compareWinHistory(1, dictionary)
         # self.save.save_win_history_data(result)
     
 
