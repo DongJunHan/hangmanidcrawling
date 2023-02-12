@@ -4,6 +4,8 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from dto import hangmaniDTO
 from service.save import jdbcImpl, jdbc
 class JDBCConfig:
+    def __init__(self):
+        self.jdbcObject = jdbcImpl.ConnectImpl(jdbc.H2Connection())
     def _escape_query_string(self, value:str):
         if "'" in value:
             value = value.replace("'", "''")
@@ -11,8 +13,7 @@ class JDBCConfig:
 
     
     def save_store_data(self, store_dataes):
-        jdbcObject = jdbcImpl.ConnectImpl(jdbc.H2Connection())
-        conn = jdbcObject.connect()
+        conn = self.jdbcObject.connect()
         key = list()
         value = list()
         try:
@@ -48,7 +49,7 @@ class JDBCConfig:
                     #     그렇다고 len - 1 하게되면  Invalid index 에러가 발생.
                     # """
                     # columnValues = ",".join("?" for _ in range(len(value))) 
-                    result = jdbcObject.execute(
+                    result = self.jdbcObject.execute(
                         conn, f"insert into store({columnName}) values({columnValues});", 
                         False)
         except Exception as e:
@@ -59,7 +60,9 @@ class JDBCConfig:
                 conn.close()
         
         
-    
+    def select_query(self, query, flag):
+        conn = self.jdbcObject.connect()
+        return self.jdbcObject.execute(conn, query, flag)
     def save_win_history_data(self, win_history_data):
         """
             Args:
