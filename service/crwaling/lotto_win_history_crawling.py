@@ -10,9 +10,6 @@ from dto import util, hangmaniDTO
 """
     TODO. 
     1. 운영시 매주 한 번 프로그램을 돌려서 상점이 새로 추가됐는지, 기존의 상점이 없어졌는지 확인이 필요.
-    2. 당첨 결과 매주 업데이트 로직.
-    3. 당첨 결과 262회부터 파싱.
-
 """
 class WinParseException(Exception):
     #생성할때 value 값을 입력 받는다.
@@ -154,7 +151,6 @@ class WinHistoryAllByArea(WinHistoryByArea):
                     if m.__len__() == 2:
                         break
                     winHistoryKey, winHistoryValue = self.winUtil.parse_win_history_data(restxt)
-
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
                     if len(winHistoryValue["1st"][1]) == 0:
                         breakCount += 1
@@ -356,6 +352,11 @@ class WinInfoUtil:
                     #parse td tag
                     p = re.compile("(?<=\<td>)(.*?)(?=<\/td>)")
                     tdTag[str(i+1) + "st"][j] = p.findall(trTag[i][j])
+                    if "class=\"lt\"" in trTag[i][j]:
+                        classLt = re.compile("(?<=\<td\sclass=\"lt\">)(.*?)(?=\<\/td>)")
+                        if len(classLt.findall(trTag[i][j])) > 0:
+                            tdTag[str(i+1) + "st"][j] += classLt.findall(trTag[i][j])  
+
         
         #save data
         for k1,v1 in tdTag.items():
