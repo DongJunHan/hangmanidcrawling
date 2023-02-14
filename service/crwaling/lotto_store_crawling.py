@@ -95,7 +95,16 @@ class StoreInfoUtil:
         }
         return headers
 
-    def get_storeinfo_postdata(self, sido, sigugun):
+    def get_lotto645_storeinfo_postdata(self, sido, sigugun):
+        postData = {
+            "searchType":"3",
+            "nowPage": "1",
+            "rtlrSttus": "001",
+            "sltGUGUN2": sigugun,
+            "sltSIDO2": sido
+        }
+        return postData
+    def get_other_storeinfo_postdata(self, sido, sigugun):
         postData = {
             "searchType":"1",
             "nowPage": "1",
@@ -109,16 +118,4 @@ class StoreInfoUtil:
         session = requests.Session()
         # session.verify = "FidderRootCertificate.crt"
         return session
-
-    # def getStoreData(self):
-    #     url = "https://dhlottery.co.kr/store.do"
-    #     session = requests.Session()
-    #     # session.verify = "FidderRootCertificate.crt"
-    #     for key in self.address_map.keys():
-    #         sido = key
-    #         for sigugun in self.address_map[key]:
-    #             speetto = self.parseStoreInfo(session, url, sido, sigugun, {"method":"sellerInfoPrintResult"})
-    #             lotto645 = self.parseStoreInfo(session, url, sido, sigugun, {"method":"sellerInfo645Result"})
-    #             storeDataes = data_compare.StoreInfoCompare().compareStores(speetto, lotto645, sido, sigugun)
-    #             DB_save.StoreInfoSave().save_store_data(storeDataes)
 

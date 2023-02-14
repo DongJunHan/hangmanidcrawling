@@ -18,8 +18,9 @@ class StoreInfoImpl:
         for key in storeUtil.address_map.keys():
             sido = key
             for sigugun in storeUtil.address_map[key]:
-                postData = storeUtil.get_storeinfo_postdata(sido, sigugun)
+                postData = storeUtil.get_other_storeinfo_postdata(sido, sigugun)
                 speetto = self._parseData(session, url, headers, postData, {"method":"sellerInfoPrintResult"})
+                postData = storeUtil.get_lotto645_storeinfo_postdata(sido, sigugun)
                 lotto645 = self._parseData(session, url, headers, postData, {"method":"sellerInfo645Result"})
                 storeDataes = data_compare.StoreInfoCompare().compareStores(speetto, lotto645, sido, sigugun)
                 result.append(storeDataes)

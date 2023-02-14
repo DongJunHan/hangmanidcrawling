@@ -62,11 +62,22 @@ class JDBCConfig:
         
     def select_query(self, query, flag):
         conn = self.jdbcObject.connect()
-        return self.jdbcObject.execute(conn, query, flag)
+        result = self.jdbcObject.execute(conn, query, flag)
+        if conn != None:
+            conn.commit()
+            conn.close()
+        return result
     def save_win_history_data(self, win_history_data):
         """
             Args:
-                win_history_data: list
+                win_history_data: list[hangmaniDTO.WinHistory]
         """
-        for data in win_history_data:
-            jdbc.execute(f"insert into win_history values('{data.storeUuid}','{data.lottoId}','{data.winRound}','{data.winRank}')")  
+        conn = self.jdbcObject.connect()
+        try:
+            for data in win_history_data:
+                self.jdbcObject.execute(conn, f"insert into win_history values('{data.storeUuid}','{data.lottoId}','{data.winRound}','{data.winRank}')", False)  
+        except Exception as e:
+            raise e
+        finally:
+            conn.commit()
+            conn.close()
