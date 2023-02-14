@@ -39,7 +39,10 @@ class WinHistoryImpl:
                 sidoOther = None
                 #광역시는 sido뒤에 광역시라고 붙여야 결과가 나옴
                 if key != "lotto645" and sido in metropolitanCity:
-                    sidoOther = sido + "광역시"
+                    if sido != "제주":
+                        sidoOther = sido + "광역시"
+                    else:
+                        sidoOther = "제주도"
                 for sigugun in winUtil.address_map[sido]:
                     postData = winUtil.get_win_history_postdata(sido, sigugun)
                     firstHistory, secondHistory = \
