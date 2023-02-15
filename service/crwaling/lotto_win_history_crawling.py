@@ -74,25 +74,23 @@ class WinHistoryCurrentRoundByArea(WinHistoryByArea):
                     m = p.findall(restxt)
                     if m.__len__() == 2:
                         break
-                    winHistoryKey, winHistoryValue = self.winUtil.parse_win_history_data(restxt)
+                    winHistoryValue = self.winUtil.parse_win_history_data(restxt)
 
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    if len(winHistoryValue["1st"][1]) == 0:
+                    if len(winHistoryValue["1st"][0]) == 0:
                         breakCount += 1
                     else:
-                        firstCompare = winHistoryValue["1st"][1][1]
-
+                        firstCompare = winHistoryValue["1st"][0]["상호명"]
                         if duplicateFirst:
                             if duplicateFirst == firstCompare:
                                 breakCount += 1
                         else:
                             duplicateFirst = firstCompare
                         
-                    if len(winHistoryValue["2st"][1]) == 0:
+                    if len(winHistoryValue["2st"][0]) == 0:
                         breakCount += 1
                     else:
-                        secondCompare = winHistoryValue["2st"][1][1]
-                        
+                        secondCompare = winHistoryValue["2st"][0]["상호명"]
                         if duplicateSecond:
                             if duplicateSecond == secondCompare:
                                 breakCount += 1
@@ -102,8 +100,8 @@ class WinHistoryCurrentRoundByArea(WinHistoryByArea):
                     if breakCount == 2:
                         break
 
-                    firstHistory = self.winUtil.get_first_win_info(winHistoryKey["1st"], winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
-                    secondHistory = self.winUtil.get_second_win_info(winHistoryKey["2st"], winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
+                    firstHistory = self.winUtil.get_win_info(winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self.winUtil.get_win_info(winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
 
                     postData["nowPage"] = str(int(postData["nowPage"]) + 1)
             # self.first_win_info[sido+" "+ sigugun] = firstHistory
@@ -150,24 +148,22 @@ class WinHistoryAllByArea(WinHistoryByArea):
                     m = p.findall(restxt)
                     if m.__len__() == 2:
                         break
-                    winHistoryKey, winHistoryValue = self.winUtil.parse_win_history_data(restxt)
+                    winHistoryValue = self.winUtil.parse_win_history_data(restxt)
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    if len(winHistoryValue["1st"][1]) == 0:
+                    if len(winHistoryValue["1st"][0]) == 0:
                         breakCount += 1
                     else:
-                        firstCompare = winHistoryValue["1st"][1][1]
-
+                        firstCompare = winHistoryValue["1st"][0]["상호명"]
                         if duplicateFirst:
                             if duplicateFirst == firstCompare:
                                 breakCount += 1
                         else:
                             duplicateFirst = firstCompare
                         
-                    if len(winHistoryValue["2st"][1]) == 0:
+                    if len(winHistoryValue["2st"][0]) == 0:
                         breakCount += 1
                     else:
-                        secondCompare = winHistoryValue["2st"][1][1]
-                        
+                        secondCompare = winHistoryValue["2st"][0]["상호명"]
                         if duplicateSecond:
                             if duplicateSecond == secondCompare:
                                 breakCount += 1
@@ -177,8 +173,8 @@ class WinHistoryAllByArea(WinHistoryByArea):
                     if breakCount == 2:
                         break
 
-                    firstHistory = self.winUtil.get_first_win_info(winHistoryKey["1st"], winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
-                    secondHistory = self.winUtil.get_second_win_info(winHistoryKey["2st"], winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
+                    firstHistory = self.winUtil.get_win_info(winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self.winUtil.get_win_info(winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
 
                     postData["nowPage"] = str(int(postData["nowPage"]) + 1)
             # self.first_win_info[sido+" "+ sigugun] = firstHistory
@@ -234,7 +230,7 @@ class WinInfoUtil:
                 f.write(f"{restxt}")
         return maxRound
 
-    def get_latitude_longitude(self, winRank, historyValue):
+    def get_latitude_longitude(self, historyValue):
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -247,79 +243,54 @@ class WinInfoUtil:
         # session.verify = "FidderRootCertificate.crt"
         latp = re.compile("(?<=\<input type=\"hidden\" name=\"lat\" value = \")(.*?)(?=\">)")
         lonp = re.compile("(?<=\<input type=\"hidden\" name=\"lon\" value = \")(.*?)(?=\">)")
-        for num, values in historyValue.items():
-            if winRank == 1:
-                value = values[4]
-            elif winRank == 2:
-                value = values[3]
-            queryParam = f"method=topStoreLocation&gbn=lotto&rtlrId={value}"
+        for i in range(len(historyValue)):
+            queryParam = f"method=topStoreLocation&gbn=lotto&rtlrId={historyValue[i]['위치보기']}"
             url = f"https://dhlottery.co.kr/store.do?{queryParam}"
             response = session.request("GET", url, headers=headers)
             restxt = response.text
 
             if latp.search(restxt) == None:
-                raise WinParseException(f"위치보기 위도 파싱 실패=> {values}")
+                raise WinParseException(f"위치보기 위도 파싱 실패=> {historyValue[i]}")
             
             if lonp.search(restxt) == None:
-                raise WinParseException(f"위치보기 경도 파싱 실패=> {values}")
+                raise WinParseException(f"위치보기 경도 파싱 실패=> {historyValue[i]}")
             
             if len(latp.findall(restxt)[0]) == 0:
-                raise WinParseException(f"위치보기 위도 결과 값 없음=> {values}")
+                raise WinParseException(f"위치보기 위도 결과 값 없음=> {historyValue[i]}")
             if len(lonp.findall(restxt)[0]) == 0:
-                raise WinParseException(f"위치보기 경도 결과 값 없음=> {values}")
-            if winRank == 1:
-                historyValue[num][4] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
-            elif winRank == 2:
-                historyValue[num][3] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
+                raise WinParseException(f"위치보기 경도 결과 값 없음=> {historyValue[i]}")
+            historyValue[i]['위치보기'] = latp.findall(restxt)[0] + "," + lonp.findall(restxt)[0]
         session.close()
         return historyValue
 
 
-    def get_first_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
+    def get_win_info(self, historyValue, lotto_type, lotto_round, result:list):
         """
             당첨결과에서 위도,경도 데이터는 lotto645밖에 없으므로 lotto645에서만 위도/경도를 구한다.
             Args:
-                historyKey: list
-                historyValue: dict
+                historyValue: list[dict]
                 lotto_type: str
                 lotto_round: str
                 result: list
             Return:
                 result: list
+            [{}]
+            [{'번호': '4', '상호명': '복권방', '소재지': '인천광역시 남동구 백범로273번길 1 (간석동) 1 1층'},...]
         """
-        if len(historyValue) == 0 or len(historyValue[1]) == 0:
+        if len(historyValue[0]) == 0:
             return result
         if lotto_type == "L645":
-            historyValue = self.get_latitude_longitude(1, historyValue)
-        store = {}
-        for key, value in historyValue.items():
-            for i in range(len(value)):
-                if historyKey[i] == "위치보기":
-                    store["위도경도"] = value[i]
+            historyValue = self.get_latitude_longitude(historyValue)
+        for value in historyValue:
+            store = {}
+            for k, v in value.items():
+                if k == "위치보기":
+                    store["위도경도"] = v
                 else:
-                    store[historyKey[i]] = value[i]
-            store["winRound"] = lotto_round
-            result.append(store)
-        return result
-    
-    def get_second_win_info(self, historyKey, historyValue, lotto_type, lotto_round, result:list):
-        """
-            ['상호명,소재지,위치등스피또5002등배출점안내', '번호', '상호명', '소재지', '조회결과가없습니다.']
-            ['상호명,소재지,위치등스피또5001등배출점안내', '번호', '상호명', '소재지', '1', 'CU사상서부', '부산사상구사상로211번길121층']
-        """
-        if len(historyValue) == 0 or len(historyValue[1]) == 0:
-            return result
-        if lotto_type == "L645":
-            historyValue = self.get_latitude_longitude(2, historyValue)
-        store = {}
-        for key, value in historyValue.items():
-            for i in range(len(value)):
-                if historyKey[i] == "위치보기":
-                    store["위도경도"] = value[i]
-                else:
-                    store[historyKey[i]] = value[i]
-            store["winRound"] = lotto_round
-            result.append(store)
+                    store[k] = v
+                store["winRound"] = lotto_round
+            result.append(store.copy())
+            store.clear()
         return result
     
     def parse_win_history_data(self, response):
@@ -330,42 +301,47 @@ class WinInfoUtil:
                 key  : dict
                 tdTeg: dict
         """
-        p = re.compile("(?<=\<table class\=\"tbl_data tbl_data_col\">)(.*?)(?=<\/tbody>)",re.DOTALL)
+                #parse table tag
+        p = re.compile("(?<=\<table class\=\"tbl_data tbl_data_col\">)(.*?)(?=<\/table>)",re.DOTALL)
         m = p.findall(response)
-        trTag = []
-        for i in m:
-            i = i.replace("\n","").replace("\t","").replace("\r","")
+        with open("./adsasd.html","w") as f:
+            f.write(response)
+        trTags = {}
+        key = {}
+        for i in range(len(m)):
+            m[i] = m[i].replace("\n","").replace("\t","").replace("\r","")
+            #parse thead tag
+            p = re.compile("(?<=\<thead>)(.*?)(?=<\/thead>)")
+            thead = p.findall(m[i])[0]
+            p = re.compile("(?<=\<th scope\=\"col\">)(.*?)(?=<\/th>)")
+            key[str(i+1)+"st"] = p.findall(thead)
+            #parse tbody tag
+            p = re.compile("(?<=\<tbody>)(.*?)(?=<\/tbody>)")
+            tbody = p.findall(m[i])[0]
             #parse tr tag
             p = re.compile("(?<=\<tr>)(.*?)(?=<\/tr>)")
-            tr = p.findall(i)
-            trTag.append(tr)
-        key = {}
-        tdTag = {}
-        #parse th tag
-        for i in range(len(trTag)):
-            tdTag[str(i+1) + "st"] = {}
-            for j in range(len(trTag[i])):
-                p = re.compile("(?<=\<th scope\=\"col\">)(.*?)(?=<\/th>)")
-                if p.search(trTag[i][j]):
-                    key[str(i+1) + "st"] = p.findall(trTag[i][j])
-                else:
-                    #parse td tag
-                    p = re.compile("(?<=\<td>)(.*?)(?=<\/td>)")
-                    tdTag[str(i+1) + "st"][j] = p.findall(trTag[i][j])
-                    if "class=\"lt\"" in trTag[i][j]:
-                        classLt = re.compile("(?<=\<td\sclass=\"lt\">)(.*?)(?=\<\/td>)")
-                        if len(classLt.findall(trTag[i][j])) > 0:
-                            tdTag[str(i+1) + "st"][j] += classLt.findall(trTag[i][j])  
+            trTags[str(i+1)+"st"] = p.findall(tbody)
+        tdTags = {}
+        for k, v in trTags.items():
+            #(\<tr>)(.*?)(<\/tr>) 전방탐색, 후방탐색을 사용하면 <td></td> 같은 경우 가져오지 못하고 뒤에것과 겹친다
+            p = re.compile("(\<td>)(.*?)(<\/td>)")
+            classLt = re.compile("(\<td\sclass=\"lt\">)(.*?)(\<\/td>)")
+            latiLongi = re.compile("(\<a href=\"\#\" class=\"btn_search\" onClick=\"javascript\:showMapPage\(\\')(.*?)(\\'\)\")")
+            tdTags[k] = []
+            for t in range(len(v)):
+                tdTag = {}
+                td = p.findall(v[t])
+                for i in range(len(td)):
+                    if "javascript" in td[i][1]:
+                        td[i] = latiLongi.findall(td[i][1])[0]
+                    tdTag[key[k][i]] = td[i][1]
+                td = classLt.findall(v[t])
+                for i in range(len(td)):
+                    tdTag[key[k][2]] = td[i][1]
+                tdTags[k].append(tdTag.copy())
+                tdTag.clear()
 
-        
-        #save data
-        for k1,v1 in tdTag.items():
-            for k, v in v1.items():
-                p = re.compile("(?<=\<a href=\"\#\" class=\"btn_search\" onClick=\"javascript\:showMapPage\(\\')(.*?)(?=\\'\)\")")
-                for i in range(len(v)):
-                    if p.search(v[i]):
-                        tdTag[k1][k][i] = p.findall(v[i])[0]
-        return key, tdTag
+        return tdTags
     
     def get_win_history_header(self):
         headers = {
