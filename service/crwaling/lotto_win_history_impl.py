@@ -12,8 +12,8 @@ class WinHistoryImpl:
     
     def compareAndSaveData(self, fristList, secondList):
         dataCompare = data_compare.WinHistoryInfoCompare()
-        l, unl = dataCompare.compareWinHistoryToStoreInfo(1, fristList)
-        l2, unl2 = dataCompare.compareWinHistoryToStoreInfo(2, secondList)
+        l, unl = dataCompare.compareLotto645HistoryToStoreInfo(1, fristList["lotto645"])
+        l2, unl2 = dataCompare.compareLotto645HistoryToStoreInfo(2, secondList["lotto645"])
         
         self.jdbcConfig.save_win_history_data(l)
         self.jdbcConfig.save_win_history_data(l2)
@@ -38,23 +38,23 @@ class WinHistoryImpl:
             for sido in winUtil.address_map.keys():
                 sidoOther = None
                 #광역시는 sido뒤에 광역시라고 붙여야 결과가 나옴
-                if key != "lotto645" and sido in metropolitanCity:
-                    if sido != "제주":
-                        sidoOther = sido + "광역시"
-                    else:
-                        sidoOther = "제주도"
+                # if key != "lotto645" and sido in metropolitanCity:
+                #     if sido != "제주":
+                #         sidoOther = sido + "광역시"
+                #     else:
+                #         sidoOther = "제주도"
                 for sigugun in winUtil.address_map[sido]:
                     postData = winUtil.get_win_history_postdata(sido, sigugun)
                     firstHistory, secondHistory = \
                             self._parseData(session, url, headers, postData, queryParam)
-                    if sidoOther is not None:
-                        postData = winUtil.get_win_history_postdata(sidoOther, sigugun)
-                        firstHistoryOther, secondHistoryOther = \
-                            self._parseData(session, url, headers, postData, queryParam)
-                        for i in range(len(firstHistoryOther)):
-                            firstHistory.append(firstHistoryOther[i])
-                        for i in range(len(secondHistoryOther)):
-                            secondHistory.append(secondHistoryOther[i])
+                    # if sidoOther is not None:
+                    #     postData = winUtil.get_win_history_postdata(sidoOther, sigugun)
+                    #     firstHistoryOther, secondHistoryOther = \
+                    #         self._parseData(session, url, headers, postData, queryParam)
+                        # for i in range(len(firstHistoryOther)):
+                            # firstHistory.append(firstHistoryOther[i])
+                        # for i in range(len(secondHistoryOther)):
+                            # secondHistory.append(secondHistoryOther[i])
 
                     firstSido[sido+" "+ sigugun] = firstHistory
                     secondSido[sido+" "+ sigugun] = secondHistory
