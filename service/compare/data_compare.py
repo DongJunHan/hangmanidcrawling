@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 import uuid
 import html
 import re
+import abc
 from save import jdbc_config
 from dto import hangmaniDTO
 class StoreInfoCompare:
@@ -242,14 +243,48 @@ class DataException(Exception):
     #생성할때 받은 value 값을 확인 한다.
     def __str__(self):
         return self.values
+class WinHistoryCommon:
+    def doubleWhiteSpaceRemove(self, address):
+        #space가 두 칸씩 되어있는 주소가 있어 쿼리시 문제가 발생
+        temp = ""
+        addressSplit = address.split(" ")
+        for i in range(len(addressSplit)):
+            if len(addressSplit[i].replace(" ","")) == 0:
+                continue
+            temp = temp + addressSplit[i] + " "
+        
+        return temp.rstrip()
 
-class WinHistoryInfoCompare:
-    def __init__(self):
-        self.winHistory = hangmaniDTO.WinHistory()
-        self.jdbcConfig = jdbc_config.JDBCConfig()
-    
-
-    def _setStoreName(self, store_name):
+    def changeAddress(self, sigunArr, address):
+        """
+            1. 지번일 때 - 왠만하면 폐점인 것으로 보임
+            2. 도로명일 때 - 상호명은 굉장히 부정확할 확률이 많으므로 주소 'xx로'
+                            까지만 잘라서 쿼리에 날려본다
+        """
+        queryAddress = ""
+       
+        addressSplit = address.split(" ")
+        
+        if ("동" in addressSplit[2])\
+            and ("로" not in addressSplit[2]):
+            p = re.compile(f"({sigunArr[0]}\s{sigunArr[1]}\s)(.*?)(?=동)")
+            matchTuple = p.findall(address)
+            if len(matchTuple) > 0:
+                for j in range(len(matchTuple[0])):
+                    queryAddress +=  matchTuple[0][j]
+            else:
+                queryAddress = address
+        else:
+            # (서울\s노원구\s.*?)([\d])(?=[\D].?)
+            p = re.compile(f"({sigunArr[0]}\s{sigunArr[1]}\s.*?)([\d])(?=[\D].?)")
+            matchTuple = p.findall(address)
+            if len(matchTuple) > 0:
+                for j in range(len(matchTuple[0])):
+                    queryAddress +=  matchTuple[0][j]
+            else:
+                queryAddress = address
+        return queryAddress
+    def changeStoreName(self, store_name):
         """
             store 테이블의 상점명과 당첨내역 파싱한 상점명의 로또/복권 이라는 단어가
             앞/뒤로 바뀌어있는 경우가 있어서 로또/복권은 빼고 like문으로 쿼리 날려보기 위함.
@@ -270,12 +305,36 @@ class WinHistoryInfoCompare:
             else:
                 result = matchTuple[0][2]
         return result
-    
+
+
+class WinHistoryInfoCompare(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def compareHistoryToStoreInfo(self, rank, win_history_info:dict):
+        """
+            Args:
+                rank            : int 1등/2등
+                win_history_info: dict
+                {'sido sigugun' : [{'번호':'1','상호명':'','구분':'','소재지':'','위치보기':'','round':''}]}
+            Returns:
+                list[hangmaniDTO.WinHistory]
+                list[str] unknown Store
+        """
+        raise NotImplemented
+
+class Lotto645WinInfoCompare(WinHistoryInfoCompare):
+    def __init__(self):
+        self.jdbcConfig = jdbc_config.JDBCConfig()
+        self.winHistoryCommon = WinHistoryCommon()
+
     def _getStoreInfoByLotto645WinHistory(self, store_name, store_address, sido, sigugn, latitude, longitude):
         """
-            1. 위에서 수정한 주소로 쿼리를 날린다.
-            2. 위에서 수정한 상점명으로 쿼리를 날린다.
-            3. 경도/위도를 소수점 세번째자리까지 상세하게 검색한다.
+            * 위에서 수정한 주소로 쿼리를 날린다.
+            * 위에서 수정한 상점명으로 쿼리를 날린다.
+            * 경도/위도를 소수점 세번째자리까지 상세하게 검색한다.
+            
+            like문으로 쿼리를 날릴 것이기 때문에 전체주소로 검색하지 않는다.
+            * 먼저 지번을 걸러낸다.
+            * 그리고 도로명주소는 xx로 뒤에 숫자까지만 파싱
         """
         selectFlag = True
         query = f"select storeuuid, storename from store where \
@@ -309,7 +368,8 @@ class WinHistoryInfoCompare:
                     and storelongitude like ('{longitude[:7]}%');"
                 queryResult = self.jdbcConfig.select_query(query, selectFlag)
         return query, queryResult
-    def compareLotto645HistoryToStoreInfo(self, rank, win_history_info:dict):
+    
+    def compareHistoryToStoreInfo(self, rank, win_history_info:dict):
         """
             Args:
                 rank            : int 1등/2등
@@ -328,46 +388,9 @@ class WinHistoryInfoCompare:
         for sidoSigugun, v in win_history_info.items():
             sigunArr = sidoSigugun.split(" ")
             for i in range(len(v)):
-                """
-                    1. 지번일 때 - 왠만하면 폐점인 것으로 보임
-                    2. 도로명일 때 - 상호명은 굉장히 부정확할 확률이 많으므로 주소 'xx로'
-                                    까지만 잘라서 쿼리에 날려본다
-                """
-                queryAddress = ""
-                """
-                    like문으로 쿼리를 날릴 것이기 때문에 전체주소로 검색하지 않는다.
-                    1. 먼저 지번을 걸러낸다.
-                    2. 그리고 도로명주소는 xx로 뒤에 숫자까지만 파싱
-                """
-                addressSplit = v[i]["소재지"].split(" ")
-                #space가 두 칸씩 되어있는 주소가 있어 쿼리시 문제가 발생
-                temp = ""
-                for i in range(len(addressSplit)):
-                    if len(addressSplit[i].replace(" ","")) == 0:
-                        continue
-                    temp = temp + addressSplit[i] + " "
-                
-                v[i]["소재지"] = temp.rstrip()
-                if ("동" in addressSplit[2])\
-                    and ("로" not in addressSplit[2]):
-                    p = re.compile(f"({sigunArr[0]}\s{sigunArr[1]}\s)(.*?)(?=동)")
-                    matchTuple = p.findall(v[i]["소재지"])
-                    if len(matchTuple) > 0:
-                        for j in range(len(matchTuple[0])):
-                            queryAddress +=  matchTuple[0][j]
-                    else:
-                        queryAddress = v[i]["소재지"]
-                else:
-                    # (서울\s노원구\s.*?)([\d])(?=[\D].?)
-                    p = re.compile(f"({sigunArr[0]}\s{sigunArr[1]}\s.*?)([\d])(?=[\D].?)")
-                    matchTuple = p.findall(v[i]["소재지"])
-                    if len(matchTuple) > 0:
-                        for j in range(len(matchTuple[0])):
-                            queryAddress +=  matchTuple[0][j]
-                    else:
-                        queryAddress = v[i]["소재지"]
-                storeName = v[i]['상호명']
-                storeName = self._setStoreName(storeName)
+                v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
+                queryAddress = self.winHistoryCommon.changeAddress(sigunArr, v[i]["소재지"])
+                storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
   
                 latiLong = v[i]['위도경도'].split(",")
                 # and storename like ('%{storeName}%')\
@@ -384,11 +407,11 @@ class WinHistoryInfoCompare:
                     print(f"{queryResult}\n {v[i]}, winRank : {rank}, {query}")
                     for p in range(len(queryResult)):
                         print(queryResult[p]['storename'])
-                        print(v[i]['상호명'])
                         if queryResult[p]["storename"].find(v[i]['상호명']) > -1:
                             queryResult = [queryResult[p]]
                     if len(queryResult) > 1:
-                        raise DataException("같은 상호명이 두 곳 이상입니다.")
+                        continue
+                        # raise DataException("같은 상호명이 두 곳 이상입니다.")
                 if len(queryResult) == 0:
                     #마지막으로 원본 주소로 쿼리를 날려본다.
                     query = f"select storeuuid, storename from store where \
