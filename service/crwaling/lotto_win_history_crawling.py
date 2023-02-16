@@ -22,13 +22,13 @@ class WinParseException(Exception):
 
 class WinHistoryByArea(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def parseWinHistory(self, session, url, headers, postData, queryParam:dict):
+    def parseWinHistory(self, session, url, sido, headers, queryParam:dict):
         """
             Args:
                 session   : requests.Session
                 url       : str
+                sido      : str
                 headers   : dict
-                postData  : dict
                 queryParam: dict
             Return
                 firstList: list
@@ -41,147 +41,136 @@ class WinHistoryCurrentRoundByArea(WinHistoryByArea):
         self.winUtil = WinInfoUtil()
         # self.first_win_info = {}
         # self.second_win_info = {}
-    
-    def parseWinHistory(self, session, url, headers, postData, queryParam):
+
+    def _insertSigugun(self, sido, data_list, total_data):
+        """
+            Args:
+                sido      : str
+                data_list : list
+                total_data: dict
+            Return
+                total_data: dict
+        """
+        addressMap = util.Variable().address_map
+        changeFlag = False
+        if sido in "광역시":
+            sido = sido.replace("광역시","")
+            changeFlag = True
+        elif sido == "제주도":
+            sido = "제주"
+            changeFlag = True
+        sigugunKey = sido + " " + sigugun
+        sigugunList = addressMap[sido]
+        for sigugun in sigugunList:
+            if sigugunKey in total_data.keys():
+                continue
+            total_data[sigugunKey] = []
+        
+        for data in data_list:
+            addressArr = data["소재지"].split()
+            if changeFlag:
+                address = sido
+                for i in range(1, len(addressArr)):
+                    address = address + " " + addressArr[i]
+                data["소재지"] = address
+            for sigugun in sigugunList:
+                if addressArr[1] in sigugun:
+                    total_data[sigugunKey].append(data.copy())
+        return total_data
+
+    def parseWinHistory(self, session, url, sido, headers, queryParam):
         """
             Args:
                 session   : requests.Session
                 url       : str
+                sido      : str
                 headers   : dict
-                postData  : dict
                 queryParam: dict
             Return
                 firstList: list
                 secondList: List
         """
-        firstList = []
-        secondList = []
+        firstSido = {}
+        secondSido = {}
+        postData = self.winUtil.get_win_history_postdata(sido, "")
         maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
-        try:
-            firstHistory = []
-            secondHistory = []
-            for no in range(int(maxRound), int(maxRound)+1):
-                postData["drwNo"] = str(no)
-                duplicateFirst = None
-                duplicateSecond = None
-                postData['nowPage'] = "1"
-                for i in range(30):
-                    breakCount = 0
-                    response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
-                    restxt = response.text
-                    #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
-                    p = re.compile("(\<td class=\"nodata\" colspan=\"[\d]+\"\>)(.*?)(\<\/td\>)")
-                    m = p.findall(restxt)
-                    if m.__len__() == 2:
-                        break
-                    winHistoryValue = self.winUtil.parse_win_history_data(restxt)
-
-                    #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    if len(winHistoryValue["1st"][0]) == 0:
-                        breakCount += 1
-                    else:
-                        firstCompare = winHistoryValue["1st"][0]["상호명"]
-                        if duplicateFirst:
-                            if duplicateFirst == firstCompare:
-                                breakCount += 1
-                        else:
-                            duplicateFirst = firstCompare
-                        
-                    if len(winHistoryValue["2st"][0]) == 0:
-                        breakCount += 1
-                    else:
-                        secondCompare = winHistoryValue["2st"][0]["상호명"]
-                        if duplicateSecond:
-                            if duplicateSecond == secondCompare:
-                                breakCount += 1
-                        else:
-                            duplicateSecond = secondCompare
-                    
-                    if breakCount == 2:
-                        break
-
-                    firstHistory = self.winUtil.get_win_info(winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
-                    secondHistory = self.winUtil.get_win_info(winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
-
-                    postData["nowPage"] = str(int(postData["nowPage"]) + 1)
-            # self.first_win_info[sido+" "+ sigugun] = firstHistory
-            # self.second_win_info[sido+" "+ sigugun] = secondHistory
-        except Exception as e:
-            raise e   
-        return firstHistory, secondHistory
+        sidoOther = self.winUtil.checkMetropolitanCity(sido, queryParam["pageGubun"])
+        firstHistory, secondHistory = \
+                    self.winUtil.parseWinHistoryLogic(session, url, int(maxRound), maxRound, postData, headers, queryParam)
+        #시구군을 분리하는 로직
+        firstSido = self._insertSigugun(sido, firstHistory, firstSido)
+        secondSido = self._insertSigugun(sido, secondHistory, secondSido)
+        # firstSido[sido+" "+ sigugun] = firstHistory
+        # secondSido[sido+" "+ sigugun] = secondHistory
+        
+        if sidoOther is not None:
+            firstHistory.clear()
+            secondHistory.clear()
+            postData = self.winUtil.get_win_history_postdata(sidoOther, "")
+            firstHistory, secondHistory = \
+                    self.winUtil.parseWinHistoryLogic(session, url, int(maxRound), maxRound, postData, headers, queryParam)
+            firstSido = self._insertSigugun(sido, firstHistory, firstSido)
+            secondSido = self._insertSigugun(sido, secondHistory, secondSido)
+        
+        return firstSido, secondSido
 class WinHistoryAllByArea(WinHistoryByArea):
     def __init__(self):
         self.winUtil = WinInfoUtil()
+        self.urban = util.Variable().address_map
         # self.first_win_info = {}
         # self.second_win_info = {}
     
+    def _insertSidoOther(self, sido, sigugun, data_list, total_data):
+        for data in data_list:
+            addressArr = data["소재지"].split()
+            address = sido
+            for i in range(1, len(addressArr)):
+                address = address + " " + addressArr[i]
+            data["소재지"] = address
+            total_data[sido + " " + sigugun].append(data.copy())
+        return total_data
+
     #method=topStore&pageGubun=L645
-    def parseWinHistory(self, session, url, headers, postData, queryParam):
+    def parseWinHistory(self, session, url, sido, headers, queryParam):
         """
             Args:
                 session   : requests.Session
                 url       : str
+                sido      : str
                 headers   : dict
-                postData  : dict
                 queryParam: dict
             Return
                 firstList: list
                 secondList: List
         """
-        firstList = []
-        secondList = []
+        firstSido = {}
+        secondSido = {}
+        firstHistory = []
+        secondHistory = []
+        lottoType = self.winUtil.reverseLottoType.get(queryParam["pageGubun"])
+        postData = self.winUtil.get_win_history_postdata(sido, "")
         maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
-        try:
-            firstHistory = []
-            secondHistory = []
-            for no in range(1, int(maxRound)+1):
-                postData["drwNo"] = str(no)
-                duplicateFirst = None
-                duplicateSecond = None
-                postData['nowPage'] = "1"
-                for i in range(30):
-                    breakCount = 0
-                    response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
-                    restxt = response.text
-                    #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
-                    p = re.compile("(\<td class=\"nodata\" colspan=\"[\d]+\"\>)(.*?)(\<\/td\>)")
-                    m = p.findall(restxt)
-                    if m.__len__() == 2:
-                        break
-                    winHistoryValue = self.winUtil.parse_win_history_data(restxt)
-                    #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
-                    if len(winHistoryValue["1st"][0]) == 0:
-                        breakCount += 1
-                    else:
-                        firstCompare = winHistoryValue["1st"][0]["상호명"]
-                        if duplicateFirst:
-                            if duplicateFirst == firstCompare:
-                                breakCount += 1
-                        else:
-                            duplicateFirst = firstCompare
-                        
-                    if len(winHistoryValue["2st"][0]) == 0:
-                        breakCount += 1
-                    else:
-                        secondCompare = winHistoryValue["2st"][0]["상호명"]
-                        if duplicateSecond:
-                            if duplicateSecond == secondCompare:
-                                breakCount += 1
-                        else:
-                            duplicateSecond = secondCompare
-                    
-                    if breakCount == 2:
-                        break
+        
+        for sigugun in self.urban[sido]:
+            sidoOther = self.winUtil.checkMetropolitanCity(sido, queryParam["pageGubun"])
+            postData = self.winUtil.get_win_history_postdata(sido, sigugun)
+            firstHistory, secondHistory = \
+                    self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
+            firstSido[sido+" "+ sigugun] = firstHistory
+            secondSido[sido+" "+ sigugun] = secondHistory
+            if sidoOther is None:
+                continue
+            firstHistory.clear()
+            secondHistory.clear()
+            
+            postData = self.winUtil.get_win_history_postdata(sidoOther, sigugun)
+            firstHistory, secondHistory = \
+                    self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
 
-                    firstHistory = self.winUtil.get_win_info(winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
-                    secondHistory = self.winUtil.get_win_info(winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
-
-                    postData["nowPage"] = str(int(postData["nowPage"]) + 1)
-            # self.first_win_info[sido+" "+ sigugun] = firstHistory
-            # self.second_win_info[sido+" "+ sigugun] = secondHistory
-        except Exception as e:
-            raise e   
-        return firstHistory, secondHistory
+            firstSido = self._insertSidoOther(sido, sigugun, firstHistory, firstSido)
+            secondSido = self._insertSidoOther(sido, sigugun, secondHistory, secondSido)
+        
+        return firstSido, secondSido
 class WinInfoUtil:
     def __init__(self):
         """
@@ -194,10 +183,76 @@ class WinInfoUtil:
                 "speetto1000":"SP1000",
                 "speetto2000":"SP2000"
             }
+        self.reverseLottoType = {
+                "L645":"lotto645",
+                "L720":"annual",
+                "SP500":"speetto500",
+                "SP1000":"speetto1000",
+                "SP2000":"speetto2000"
+        }
         self.address_map = util.Variable().address_map
         self.util = util.Utils()
         self.get_latitude_longitude = self.util.retry_wrapper(self.get_latitude_longitude)
+    
+    def parseWinHistoryLogic(self, session, url, initialRound, maxRound, postData,headers, queryParam):
+        try:
+            # postData = self.winUtil.get_win_history_postdata(sido, sigugun)
+            firstHistory = []
+            secondHistory = []
+            for no in range(initialRound, int(maxRound)+1):
+                postData["drwNo"] = str(no)
+                duplicateFirst = None
+                duplicateSecond = None
+                postData['nowPage'] = "1"
+                for i in range(30):
+                    breakCount = 0
+                    response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
+                    restxt = response.text
+                    #<td class="nodata" colspan="5">조회 결과가 없습니다.</td>
+                    p = re.compile("(\<td class=\"nodata\" colspan=\"[\d]+\"\>)(.*?)(\<\/td\>)")
+                    m = p.findall(restxt)
+                    if m.__len__() == 2:
+                        break
+                    winHistoryValue = self.parse_win_history_data(restxt)
+                    #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
+                    if len(winHistoryValue["1st"][0]) == 0:
+                        breakCount += 1
+                    else:
+                        firstCompare = winHistoryValue["1st"][0]["상호명"]
+                        if duplicateFirst:
+                            if duplicateFirst == firstCompare:
+                                breakCount += 1
+                        else:
+                            duplicateFirst = firstCompare
+                    if len(winHistoryValue["2st"][0]) == 0:
+                        breakCount += 1
+                    else:
+                        secondCompare = winHistoryValue["2st"][0]["상호명"]
+                        if duplicateSecond:
+                            if duplicateSecond == secondCompare:
+                                breakCount += 1
+                        else:
+                            duplicateSecond = secondCompare
+                    if breakCount == 2:
+                        break
+                    firstHistory = self.get_win_info(winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
+                    secondHistory = self.get_win_info(winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
+                    postData["nowPage"] = str(int(postData["nowPage"]) + 1)
+            # self.first_win_info[sido+" "+ sigugun] = firstHistory
+            # self.second_win_info[sido+" "+ sigugun] = secondHistory
+        except Exception as e:
+            raise e 
+        return firstHistory, secondHistory
 
+    def checkMetropolitanCity(self, sido, lotto_type):
+        metropolitanCity = ["인천","울산","광주","부산","제주","대전","대구"]
+        sidoOther = None
+        if (self.reverseLottoType.get(lotto_type) != "lotto645") and (sido in metropolitanCity):
+            if sido == "제주":
+                sidoOther = "제주도"
+            else:
+                sidoOther = sido + "광역시"
+        return sidoOther
 
     def find_max_round(self, session, url, headers, postData, param):
         """
