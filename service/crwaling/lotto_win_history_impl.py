@@ -13,10 +13,10 @@ class WinHistoryImpl:
     def compareAndSaveData(self, fristList, secondList):
         lotto645 = data_compare.Lotto645WinInfoCompare()
         others = data_compare.OtherWinInfoCompare()
-        # l, unl = lotto645.compareHistoryToStoreInfo(1, fristList["lotto645"])
-        # l2, unl2 = lotto645.compareHistoryToStoreInfo(2, secondList["lotto645"])
-        # self.jdbcConfig.save_win_history_data(l)
-        # self.jdbcConfig.save_win_history_data(l2)
+        l, unl = lotto645.compareHistoryToStoreInfo(1, fristList["lotto645"])
+        l2, unl2 = lotto645.compareHistoryToStoreInfo(2, secondList["lotto645"])
+        self.jdbcConfig.save_win_history_data(l)
+        self.jdbcConfig.save_win_history_data(l2)
             
         l, unl = others.compareHistoryToStoreInfo(1, fristList)
         l2, unl2 = others.compareHistoryToStoreInfo(2, secondList)

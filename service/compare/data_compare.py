@@ -376,7 +376,6 @@ class OtherWinInfoCompare(WinHistoryInfoCompare):
                     v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
                     queryAddress = self.winHistoryCommon.changeAddress(sigunArr, v[i]["소재지"])
                     storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
-                    print(f"@@@@ : {storeName}")
                     # and storename like ('%{storeName}%')\
                     query, queryResult = self._getStoreInfoByOther5WinHistory\
                                     (storeName, queryAddress, sigunArr[0], sigunArr[1])
