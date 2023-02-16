@@ -12,17 +12,16 @@ class WinHistoryImpl:
     
     def compareAndSaveData(self, fristList, secondList):
         lotto645 = data_compare.Lotto645WinInfoCompare()
-        for k in fristList.keys():
-            if k == "lotto645":
-                l, unl = lotto645.compareHistoryToStoreInfo(1, fristList[k])
-                l2, unl2 = lotto645.compareHistoryToStoreInfo(2, secondList[k])
-                self.jdbcConfig.save_win_history_data(l)
-                self.jdbcConfig.save_win_history_data(l2)
-            # else:
-                # l, unl = lotto645.compareHistoryToStoreInfo(1, fristList[k])
-                # l2, unl2 = lotto645.compareHistoryToStoreInfo(2, secondList[k])
-                # self.jdbcConfig.save_win_history_data(l)
-                # self.jdbcConfig.save_win_history_data(l2)
+        others = data_compare.OtherWinInfoCompare()
+        # l, unl = lotto645.compareHistoryToStoreInfo(1, fristList["lotto645"])
+        # l2, unl2 = lotto645.compareHistoryToStoreInfo(2, secondList["lotto645"])
+        # self.jdbcConfig.save_win_history_data(l)
+        # self.jdbcConfig.save_win_history_data(l2)
+            
+        l, unl = others.compareHistoryToStoreInfo(1, fristList)
+        l2, unl2 = others.compareHistoryToStoreInfo(2, secondList)
+        self.jdbcConfig.save_win_history_data(l)
+        self.jdbcConfig.save_win_history_data(l2)
         
     def getData(self):
         winUtil = lotto_win_history_crawling.WinInfoUtil()
