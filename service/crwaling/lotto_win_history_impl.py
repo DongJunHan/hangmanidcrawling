@@ -40,8 +40,13 @@ class WinHistoryImpl:
             firstResult[key] = {}
             secondResult[key] = {}
             for sido in winUtil.address_map.keys():
-                firstSido, secondSido = \
+                firstSigugun, secondSigugun = \
                         self._parseData(session, url, sido, headers, queryParam)
+                firstSido[sido] = firstSigugun.copy()
+                secondSido[sido] = secondSigugun.copy()
+                firstSigugun.clear()
+                secondSigugun.clear()
+                
             firstResult[key] = firstSido.copy()
             secondResult[key] = secondSido.copy()
             firstSido.clear()

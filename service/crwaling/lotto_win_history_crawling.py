@@ -5,6 +5,7 @@ import re
 import requests
 import json
 import abc
+from datetime import datetime
 from dto import util, hangmaniDTO
 
 """
@@ -51,31 +52,30 @@ class WinHistoryCurrentRoundByArea(WinHistoryByArea):
             Return
                 total_data: dict
         """
-        addressMap = util.Variable().address_map
-        changeFlag = False
-        if sido in "광역시":
-            sido = sido.replace("광역시","")
-            changeFlag = True
-        elif sido == "제주도":
-            sido = "제주"
-            changeFlag = True
-        sigugunKey = sido + " " + sigugun
-        sigugunList = addressMap[sido]
-        for sigugun in sigugunList:
-            if sigugunKey in total_data.keys():
-                continue
-            total_data[sigugunKey] = []
-        
         for data in data_list:
+            data["소재지"] = data["소재지"].replace("  "," ")
             addressArr = data["소재지"].split()
-            if changeFlag:
-                address = sido
-                for i in range(1, len(addressArr)):
-                    address = address + " " + addressArr[i]
-                data["소재지"] = address
-            for sigugun in sigugunList:
-                if addressArr[1] in sigugun:
-                    total_data[sigugunKey].append(data.copy())
+            if "동행복권" in addressArr[0]:
+                continue
+            if "북도" in addressArr[0] or "남도" in addressArr[0]:
+                addressArr[0] = addressArr[0][0]+addressArr[0][2]
+            elif "특별시" in addressArr[0]:
+                addressArr[0] = addressArr[0].replace("특별시", "")
+            
+            if "광역시" in addressArr[0]:
+                addressArr[0] = addressArr[0].replace("광역시","")
+            elif addressArr[0] == "제주도":
+                addressArr[0] = "제주"
+
+            sigugunKey = addressArr[0] + " " + addressArr[1]
+            if sigugunKey not in total_data.keys():
+                total_data[sigugunKey] = []
+            
+            address = ""
+            for i in range(len(addressArr)):
+                address = address + " " + addressArr[i]
+            data["소재지"] = address
+            total_data[sigugunKey].append(data.copy())
         return total_data
 
     def parseWinHistory(self, session, url, sido, headers, queryParam):
@@ -94,24 +94,20 @@ class WinHistoryCurrentRoundByArea(WinHistoryByArea):
         secondSido = {}
         postData = self.winUtil.get_win_history_postdata(sido, "")
         maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
-        sidoOther = self.winUtil.checkMetropolitanCity(sido, queryParam["pageGubun"])
+        sidoOther = self.winUtil.checkSidoArea(sido, queryParam["pageGubun"])
         firstHistory, secondHistory = \
                     self.winUtil.parseWinHistoryLogic(session, url, int(maxRound), maxRound, postData, headers, queryParam)
-        #시구군을 분리하는 로직
+        
         firstSido = self._insertSigugun(sido, firstHistory, firstSido)
         secondSido = self._insertSigugun(sido, secondHistory, secondSido)
-        # firstSido[sido+" "+ sigugun] = firstHistory
-        # secondSido[sido+" "+ sigugun] = secondHistory
-        
-        if sidoOther is not None:
+        if sidoOther != None:
             firstHistory.clear()
             secondHistory.clear()
             postData = self.winUtil.get_win_history_postdata(sidoOther, "")
             firstHistory, secondHistory = \
                     self.winUtil.parseWinHistoryLogic(session, url, int(maxRound), maxRound, postData, headers, queryParam)
-            firstSido = self._insertSigugun(sido, firstHistory, firstSido)
-            secondSido = self._insertSigugun(sido, secondHistory, secondSido)
-        
+            firstSido = self._insertSigugun(sidoOther, firstHistory, firstSido)
+            secondSido = self._insertSigugun(sidoOther, secondHistory, secondSido)
         return firstSido, secondSido
 class WinHistoryAllByArea(WinHistoryByArea):
     def __init__(self):
@@ -120,7 +116,7 @@ class WinHistoryAllByArea(WinHistoryByArea):
         # self.first_win_info = {}
         # self.second_win_info = {}
     
-    def _insertSidoOther(self, sido, sigugun, data_list, total_data):
+    def _insertcheckMetropolitanCityOther(self, sido, sigugun, data_list, total_data):
         for data in data_list:
             addressArr = data["소재지"].split()
             address = sido
@@ -128,6 +124,33 @@ class WinHistoryAllByArea(WinHistoryByArea):
                 address = address + " " + addressArr[i]
             data["소재지"] = address
             total_data[sido + " " + sigugun].append(data.copy())
+        return total_data
+    
+    def _insertSidoOther(self, sido, data_list, total_data):
+        for data in data_list:
+            data["소재지"] = data["소재지"].replace("  "," ")
+            addressArr = data["소재지"].split()
+            if "동행복권" in addressArr[0]:
+                continue
+            if "북도" in addressArr[0] or "남도" in addressArr[0]:
+                addressArr[0] = addressArr[0][0]+addressArr[0][2]
+            elif "특별시" in addressArr[0]:
+                addressArr[0] = addressArr[0].replace("특별시", "")
+            
+            if "광역시" in addressArr[0]:
+                addressArr[0] = addressArr[0].replace("광역시","")
+            elif addressArr[0] == "제주도":
+                addressArr[0] = "제주"
+
+            sigugunKey = addressArr[0] + " " + addressArr[1]
+            if sigugunKey not in total_data.keys():
+                total_data[sigugunKey] = []
+            
+            address = ""
+            for i in range(len(addressArr)):
+                address = address + " " + addressArr[i]
+            data["소재지"] = address
+            total_data[sigugunKey].append(data.copy())
         return total_data
 
     #method=topStore&pageGubun=L645
@@ -150,10 +173,22 @@ class WinHistoryAllByArea(WinHistoryByArea):
         lottoType = self.winUtil.reverseLottoType.get(queryParam["pageGubun"])
         postData = self.winUtil.get_win_history_postdata(sido, "")
         maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
+        areaOther = self.winUtil.checkSidoArea(sido, queryParam["pageGubun"])
         
         for sigugun in self.urban[sido]:
             sidoOther = self.winUtil.checkMetropolitanCity(sido, queryParam["pageGubun"])
             postData = self.winUtil.get_win_history_postdata(sido, sigugun)
+            if areaOther != None:
+                postDataOther = self.winUtil.get_win_history_postdata(areaOther, sigugun)
+                firstHistory, secondHistory = \
+                    self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
+                firstSido = self._insertSidoOther(sido, firstHistory, firstSido)
+                secondSido = self._insertSidoOther(sido, secondHistory, secondSido)
+                # firstSido[areaOther+" "+ sigugun] = firstHistory
+                # secondSido[areaOther+" "+ sigugun] = secondHistory
+                firstHistory.clear()
+                secondHistory.clear()
+
             firstHistory, secondHistory = \
                     self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
             firstSido[sido+" "+ sigugun] = firstHistory
@@ -167,8 +202,8 @@ class WinHistoryAllByArea(WinHistoryByArea):
             firstHistory, secondHistory = \
                     self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
 
-            firstSido = self._insertSidoOther(sido, sigugun, firstHistory, firstSido)
-            secondSido = self._insertSidoOther(sido, sigugun, secondHistory, secondSido)
+            firstSido = self._insertcheckMetropolitanCityOther(sido, sigugun, firstHistory, firstSido)
+            secondSido = self._insertcheckMetropolitanCityOther(sido, sigugun, secondHistory, secondSido)
         
         return firstSido, secondSido
 class WinInfoUtil:
@@ -193,15 +228,15 @@ class WinInfoUtil:
         self.address_map = util.Variable().address_map
         self.util = util.Utils()
         self.get_latitude_longitude = self.util.retry_wrapper(self.get_latitude_longitude)
-    
+
     def parseWinHistoryLogic(self, session, url, initialRound, maxRound, postData,headers, queryParam):
         try:
             # postData = self.winUtil.get_win_history_postdata(sido, sigugun)
             firstHistory = []
             secondHistory = []
+            duplicateFirst = None
             for no in range(initialRound, int(maxRound)+1):
                 postData["drwNo"] = str(no)
-                duplicateFirst = None
                 duplicateSecond = None
                 postData['nowPage'] = "1"
                 for i in range(30):
@@ -213,7 +248,14 @@ class WinInfoUtil:
                     m = p.findall(restxt)
                     if m.__len__() == 2:
                         break
+                    #TODO 2등배출점이 많아서 2페이지 이상이 될 때, 1등 배출점이 중복되어 응답에 달려오는 현상 발견.
+                    #중복되는거 같으면  해당 회차를 전체로 조회를 한번 더 하는 방향으로 가야할듯
                     winHistoryValue = self.parse_win_history_data(restxt)
+                    with open("./log.log","a") as f:
+                        current = datetime.now()
+                        f.write(f"[{current.strftime('%H:%M:%S')}]")
+                        f.write(winHistoryValue.__str__())
+                        f.write("\n")
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
                     if len(winHistoryValue["1st"][0]) == 0:
                         breakCount += 1
@@ -222,6 +264,8 @@ class WinInfoUtil:
                         if duplicateFirst:
                             if duplicateFirst == firstCompare:
                                 breakCount += 1
+                            else:
+                                duplicateFirst = firstCompare
                         else:
                             duplicateFirst = firstCompare
                     if len(winHistoryValue["2st"][0]) == 0:
@@ -231,6 +275,8 @@ class WinInfoUtil:
                         if duplicateSecond:
                             if duplicateSecond == secondCompare:
                                 breakCount += 1
+                            else:
+                                duplicateSecond = secondCompare
                         else:
                             duplicateSecond = secondCompare
                     if breakCount == 2:
@@ -243,6 +289,25 @@ class WinInfoUtil:
         except Exception as e:
             raise e 
         return firstHistory, secondHistory
+    
+    def checkSidoArea(self, sido, lotto_type):
+        koreaArea = {"경북":"경상","경남":"경상","전북":"전라","전남":"전라","충북":"충청","충남":"충청"}
+        specialArea = ["서울", "세종"]
+        if self.reverseLottoType.get(lotto_type) == "lotto645":
+            return None
+        
+        if sido in specialArea:
+            return sido+"특별시"
+
+        for k, v in koreaArea.items():
+            if sido != k:
+                continue
+            if "북" in sido:
+                return v+"북도"
+            else:
+                return v+"남도"
+        return None
+        
 
     def checkMetropolitanCity(self, sido, lotto_type):
         metropolitanCity = ["인천","울산","광주","부산","제주","대전","대구"]
@@ -418,6 +483,7 @@ class WinInfoUtil:
             "schKey": "area",
             "schVal": (sido+" "+sigugun).encode('euc-kr')
         }
+        postData["schVal"] = postData["schVal"].rstrip()
         return postData
     
     def get_session(self):
