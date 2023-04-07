@@ -5,15 +5,14 @@ from typing import List
 @dataclass(unsafe_hash=True)
 class LottoType:
     lottoId        : int                                       #복권 PK
-    # lottoCode      : str                                       #복권 종류 코드
     lottoName      : str                                       #복권 이름
     def __init__(self):
         pass
 
 @dataclass(unsafe_hash=True)
-class LottoHandleList:
+class LottoTypeHandle:
     storeUuid        : str                                       #상점 ID PK값
-    lottoList      : list                                      #로또 리스트 DTO
+    lottoId          : int                                       #로또 타입 ID
     def __init__(self):
         pass
 
@@ -43,13 +42,14 @@ class StoreInfo:
     storesido      : str                                       #상점 시/도
     storesigugun   : str                                       #상점 시구군
     storeisActivity: bool = False                              #폐점 여부
-    lottoHandle    : ClassVar[LottoHandleList]                 #취급 복권 리스트
+    lottoHandleList: List[LottoTypeHandle] = None              #취급 복권 리스트
     # winHistory     : WinHistory                                #당첨 내역
-
+    def __init__(self):
+        pass
     def __init__(self, storeUuid = None, storeName = None, storeAddress = None, storeLatitude = None,
                     storeLongitude = None, storeBizNo = None, storeTelNum = None,
                     storeMobileNum = None, storeOpenTime = None, storeCloseTime = None, 
-                    lottoHandle = None):
+                    lottoHandleList = None):
         self.storeUuid = storeUuid
         self.storeName = storeName
         self.storeAddress = storeAddress
@@ -60,4 +60,4 @@ class StoreInfo:
         self.storeMobileNum = storeMobileNum
         self.storeOpenTime = storeOpenTime
         self.storeCloseTime = storeCloseTime
-        self.lottoHandle = lottoHandle
+        self.lottoHandleList = lottoHandleList
