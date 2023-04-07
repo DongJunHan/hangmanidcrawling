@@ -44,19 +44,18 @@ class StoreInfoCompare:
             text = escape.unescape(text)
         return text
 
-    def _set_lottoType(self, ltype, name):
+    def _set_lottoTypeHandle(self, ltype, storeUuid):
         """
             Args:
-                ltype: str 복권 타입(정해져있음)
-                name: str 복권명
+                ltype    : int 복권 타입(정해져있음)
+                storeUuid: str 상점uuid(정해져있음)
             Return
-                LottoType
+                lottoTypeHandle
         """
-        lottoType = hangmaniDTO.LottoType()
-        lottoType.lottoId = str(uuid.uuid1())
-        lottoType.lottoCode = ltype
-        lottoType.lottoName = name
-        return lottoType
+        lottoTypeHandle = hangmaniDTO.LottoTypeHandle()
+        lottoTypeHandle.lottoId = ltype
+        lottoTypeHandle.storeUuid = storeUuid
+        return lottoTypeHandle
     """
     lotto645
         {
@@ -113,17 +112,17 @@ class StoreInfoCompare:
             Return:
                 StoreInfo
         """
+        
         storeInfo = hangmaniDTO.StoreInfo()
         lottoType = hangmaniDTO.LottoType()
-        lottoHandle = hangmaniDTO.LottoHandleList()
-        lottoList = list()
+        lottoTypeList = list()
         storeInfo.storeOpenTime = None
         storeInfo.storeCloseTime = None
         storeInfo.storesido = sido
         storeInfo.storesigugun = sigugun
         #set uuid
         storeInfo.storeUuid = str(uuid.uuid1())
-        if "LONGITUDE" in storeData.keys():
+        if "LONGITUDE" in storeData.keys(): #lotto645일 때
             #lotto645
             storeInfo.storeName = self._remove_special_symbol(storeData["FIRMNM"])
             storeInfo.storeAddress = self._remove_special_symbol(storeData["BPLCDORODTLADRES"])
@@ -133,14 +132,11 @@ class StoreInfoCompare:
             storeInfo.storeMobileNum = None
             storeInfo.storeTelNum = storeData["RTLRSTRTELNO"]
             #set LottoType  Object
-            lottoList.append(self._set_lottoType("001", "로또645"))
+            lottoTypeList.append(self._set_lottoTypeHandle(1,storeInfo.storeUuid))
             
-            #set LottoHandleList Object
-            lottoHandle.storeUuid = storeInfo.storeUuid
-            lottoHandle.lottoList = lottoList
+            storeInfo.lottoHandleList = lottoTypeList
             
-            storeInfo.lottoHandle = lottoHandle
-        else:
+        else: #연금복권, 스피또 일 때
             #speetto
             address = []
             address.append(storeData["BPLCLOCPLC1"])
@@ -164,21 +160,18 @@ class StoreInfoCompare:
             storeInfo.storeTelNum = storeData["TELEPHONE"]
 
             if storeData["LOTT_YN"] == "Y":
-                lottoList.append(self._set_lottoType("001", "로또645"))
-            elif storeData["ANNUITY_YN"] == "Y":
-                lottoList.append(self._set_lottoType("002", "연금복권"))
-            elif storeData["SPEETTO500_YN"] == "Y":
-                lottoList.append(self._set_lottoType("003", "스피또500"))
-            elif storeData["SPEETTO1000_YN"] == "Y":
-                lottoList.append(self._set_lottoType("004", "스피또1000"))
-            elif storeData["SPEETTO2000_YN"] == "Y":
-                lottoList.append(self._set_lottoType("005", "스피또2000"))
+                lottoTypeList.append(self._set_lottoTypeHandle(1, storeInfo.storeUuid))
+            if storeData["ANNUITY_YN"] == "Y":
+                lottoTypeList.append(self._set_lottoTypeHandle(2, storeInfo.storeUuid))
+            if storeData["SPEETTO500_YN"] == "Y":
+                lottoTypeList.append(self._set_lottoTypeHandle(3, storeInfo.storeUuid))
+            if storeData["SPEETTO1000_YN"] == "Y":
+                lottoTypeList.append(self._set_lottoTypeHandle(4, storeInfo.storeUuid))
+            if storeData["SPEETTO2000_YN"] == "Y":
+                lottoTypeList.append(self._set_lottoTypeHandle(5, storeInfo.storeUuid))
 
-            #set LottoHandleList Object
-            lottoHandle.storeUuid = storeInfo.storeUuid
-            lottoHandle.lottoList = lottoList
+            storeInfo.lottoHandleList = lottoTypeList
             
-            storeInfo.lottoHandle = lottoHandle
         return storeInfo
     
     def _compare_tel_num(self, originTelNum, compareTelNum):
@@ -194,8 +187,8 @@ class StoreInfoCompare:
             비교(위도/경도, 전화번호)하여 같은 상점이라고 판단되면 연금복권/즉석복권의 데이터가 더 많기 때문에 연금복권/즉석복권
             데이터를 넣는다.
             Args:
-                originData  : dict
-                compareData : dict
+                originData  : dict [lotto645]
+                compareData : dict [annual,speetto]
                 sido        : str
                 sigugun     : str
             Return:

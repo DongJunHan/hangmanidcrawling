@@ -57,6 +57,8 @@ class H2Connection(Connection):
             cursor.execute(query)
             if selectFlag:
                 result = dbUtil.convert_to_schema(cursor)
+            else:
+                result = cursor.rowcount
         except Exception as e:
             raise e
         finally:
