@@ -11,7 +11,27 @@ class JDBCConfig:
             value = value.replace("'", "''")
         return value
 
-    
+    def save_store_lotto_types(self, lotto_types:list):
+        """
+            Args:
+                lotto_types: 취급로또 리스트
+            Returns:
+                None
+        """
+        conn = self.jdbcObject.connect()
+        query = ""
+        for lottoTypeHandle in lotto_types:
+            query += f"insert into lotto_type_handle values({lottoTypeHandle.lottoId},'{lottoTypeHandle.storeUuid}'); "
+        print(query)
+        result = self.jdbcObject.execute(
+                        conn, 
+                        query, 
+                        False)
+        print(f"insert result={result}")
+        if conn != None:
+            conn.commit()
+            conn.close()
+
     def save_store_data(self, store_dataes):
         conn = self.jdbcObject.connect()
         key = list()
