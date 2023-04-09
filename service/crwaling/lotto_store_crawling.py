@@ -40,9 +40,18 @@ class StoreInfoAllByArea(StoreInfoByArea):
         result = []
         
         validateInfo = None
-        for i in range(20):
-            response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
-            jsonData = response.json()
+        #check total Page
+        response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
+        jsonData = response.json()
+        if "totalPage" not in jsonData.keys():
+            return result
+        for i in range(1, int(jsonData["totalPage"])+1):
+            # if queryParam['method'] == 'sellerInfo645Result':
+            #     with open("lotto645_부평구.json", 'a') as fp:
+            #         json.dump(jsonData['arr'], fp, ensure_ascii=False)
+            # elif queryParam['method'] == 'sellerInfoPrintResult':
+            #     with open("annual_부평구.json", 'a') as fp:
+            #         json.dump(jsonData['arr'], fp, ensure_ascii=False)
             # with open("log.log", "a") as f:
                 # f.write(f"[{sido}][{sigugun}] nowPage: {postData['nowPage']}, query string: {param['method']}\n")
             try:
@@ -65,9 +74,11 @@ class StoreInfoAllByArea(StoreInfoByArea):
                     else:
                         validateInfo = jsonData["arr"][0]["FIRMNM"]
 
-                postData["nowPage"] = str(int(postData["nowPage"]) + 1)
+                postData["nowPage"] = str(i + 1)
                 for i in jsonData["arr"]:
                     result.append(i)
+                response = session.request("POST",url,headers=headers, data=postData, params=queryParam)
+                jsonData = response.json()
             except Exception as e:
                 date, time = self.storeUtil.util.get_current_time()
                 with open(f"./log/error_log.log","a") as f:
@@ -79,6 +90,7 @@ class StoreInfoAllByArea(StoreInfoByArea):
                     TODO 개발자가 알 수 있도록 알람을 띄워야할거같음
                 """
                 raise e
+        
         return result
 
 class StoreInfoUtil:
