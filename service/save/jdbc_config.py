@@ -79,7 +79,13 @@ class JDBCConfig:
                 conn.commit()
                 conn.close()
         
-        
+    def execute_query(self, query, flag):
+        conn = self.jdbcObject.connect()
+        result = self.jdbcObject.execute(conn, query, flag)
+        if conn != None:
+            conn.commit()
+            conn.close()
+        return result
     def select_query(self, query, flag):
         conn = self.jdbcObject.connect()
         result = self.jdbcObject.execute(conn, query, flag)
