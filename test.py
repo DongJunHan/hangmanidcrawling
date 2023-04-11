@@ -6,27 +6,127 @@ import json
 import re
 import requests
 from html.parser import HTMLParser
-from service.crwaling import lotto_store_crawling, lotto_win_history_crawling, lotto_config
+from service.crwaling import thumnail_crawling, lotto_store_crawling, lotto_win_history_crawling, lotto_config
 from service.compare import data_compare
 from service.save import jdbc_config
 from dto import util
+import time
 
 class TestStoreInfo(unittest.TestCase):
     def test_store_info(self):
-        storeInfo = lotto_config.LottoConfig().parseStoreInfo()
-        jdbc_config.JDBCConfig().save_store_data(storeInfo)
+        # storeInfo = lotto_config.LottoConfig().parseStoreInfo()
+        r = jdbc_config.JDBCConfig().select_query("select storeuuid, storename, storelongitude, storelatitude, storeaddress from store", True)
+        print(r)
+        # jdbc_config.JDBCConfig().save_store_data(storeInfo)
+        # for store in storeInfo[0]:
+        #     jdbc_config.JDBCConfig().save_store_lotto_types(store.lottoHandleList)
     
     def test_save_lotto_type(self):
         jdbc_config.JDBCConfig().save_store_lotto_types()
+    
+    def test_parse_thumnail(self):
+        s = "대박복권"
+        with open("naverThumnail.json", "r") as fp:
+            data = json.load(fp)
+        arr = data["place"]["list"]
+        for storeinfo in arr:
+            storename = storeinfo["name"]
+            if s != storename:
+                continue
+            thumnailUrls = storeinfo["thumUrls"]
+            detail = storeinfo["businessStatus"]["status"]["detailInfo"]
+            telDisplay = storeinfo["telDisplay"]
+            print(f"storename={storename}, thumnailurl={thumnailUrls}, detail={detail}, tel={telDisplay}")
+            for thumnail in thumnailUrls:
+                arrs = thumnail.split("/")
+                response = requests.request("GET", thumnail)
+                with open(f"{arrs[4]}.jpg","wb") as f:
+                    f.write(response.content)
+            break
+    def test_thumnail(self):
+        address_map = util.Variable().address_map
+        naver = thumnail_crawling.ThumnailByNaver()
+        # query = f"""select storeuuid, storename, storelongitude, storelatitude, storeaddress, storesido, 
+        #          storesigugun from store where storeaddress='인천 부평구 마장로 387-1 1층'"""
+        # result = jdbc_config.JDBCConfig().select_query(query, True)
+        # for store in result:
+        #     ret = naver.parseThumnailData(store)
+        #     if ret != 200:
+        #         print(f"result={result}")
+        #         print(f"@@store={store}")
+        #         return
+        check = {}
+        for i in address_map:
+            check[i] = {}
+            for j in address_map[i]:
+                check[i][j] = False
+        with open("save_thumnail.txt", "r") as f:
+            saved_storeuuid = f.read().strip()
+        while True:
+            flag = False
+            for sido in check.keys():
+                for sigugun in check[sido].keys():
+                    if check[sido][sigugun]:
+                        continue
+                    check[sido][sigugun] = True
+                    query = f"""select storeuuid, storename, storelongitude, storelatitude, storeaddress, storesido, 
+                    storesigugun from store where storesido='{sido}' and storesigugun='{sigugun}' order by storelatitude; """
+                    result = jdbc_config.JDBCConfig().select_query(query, True)
+                    for store in result:
+                        if len(saved_storeuuid) != 0:
+                            print(f"save = {saved_storeuuid}, uuid= {store['storeuuid']}")
+                            if saved_storeuuid != store["storeuuid"]:
+                                continue
+                        ret = naver.parseThumnailData(store)
+                        if ret != 200:
+                            check[sido][sigugun] = False
+                            print(f"@@store={store}")
+                            with open("save_thumnail.txt", "w") as fp:
+                                fp.write(store["storeuuid"])
+                            saved_storeuuid = store["storeuuid"]
+                            time.sleep(180)
+                            break
+            for sido in check.keys():
+                for siggugun in check[sido].keys():
+                    if check[sido][siggugun]:
+                        flag = True
+                    else:
+                        flag = False
+            if flag:
+                return
+                            
+            
 
 class TestCompareInfo(unittest.TestCase):
     def test_store_compare(self):
-        with open('annual_speetto.json') as f:
+        with open('annual_부평구.json') as f:
             originData = json.load(f)
-        with open('lotto645.json') as f:
+        with open('lotto645_부평구.json') as f:
             compareData = json.load(f)
-        ret = data_compare.StoreInfoCompare().compareStores(originData["arr"], compareData["arr"], '서울', '강남구')
-        print(ret)
+        storeInfos = data_compare.StoreInfoCompare().compareStores(originData["arr"], compareData["arr"], '인천', '부평구')
+        result = list()
+        print(type(storeInfos))
+        for i in storeInfos:
+            query = f"select storeuuid,storename from store where storename='{i.storeName.rstrip()}' and storelatitude={float(i.storeLatitude)} and storelongitude={float(i.storeLongitude)};"
+            ret = jdbc_config.JDBCConfig().select_query(query, True)
+            # print(ret)
+            if len(ret) == 0:
+                print(query)
+                result.append(None)
+                continue
+                # query = f"select storeuuid,storename from store where storename='{i.storeName.rstrip()}';"
+            result.append(ret[0])
+        for i in range(len(storeInfos)):
+            if result[i] == None:
+                continue
+            handleList = storeInfos[i].lottoHandleList
+            for j in handleList:
+                print(f"before={j.storeUuid}")
+                j.storeUuid = result[i]["storeuuid"]
+                print(f"after={j.storeUuid}")
+
+
+            ret = jdbc_config.JDBCConfig().save_store_lotto_types(handleList)
 
 
 
