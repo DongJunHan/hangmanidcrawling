@@ -25,9 +25,9 @@ class ThumnailByNaver(Thumnail):
         session = requests.Session()
         param = self.setParams(address)
         response = session.request("GET", url, params=param)
-        self.log(f"url={url}, param={param}, storeuuid={store['storeuuid']}, status={response.status_code}")
-        if response.status_code.__eq__(503):
-            self.log("first url fail={response.status_code}")
+        # self.log(f"url={url}, param={param}, storeuuid={store['storeuuid']}, status={response.status_code}")
+        if response.status_code == 503:
+            self.log(f"first url fail={response.status_code}, content={response.content}")
             print(f"fail={response.status_code}")
             return response.status_code
         jsonData = response.json()
@@ -35,9 +35,10 @@ class ThumnailByNaver(Thumnail):
             time.sleep(5)
             print("for loop sleep 1")
             param = self.setParams(jsonData["address"]["address"])
+            url = "https://map.naver.com/v5/api/addresses/"+ str(jsonData["address"]["x"]) +","+ str(jsonData["address"]["y"])
             response = session.request("GET", url, params=param)
-            self.log(f"Re param={param}, storeuuid={store['storeuuid']}, status={response.status_code}")
-            if response.status_code.__eq__(200):
+            # self.log(f"Re url={url}, param={param}, storeuuid={store['storeuuid']}, status={response.status_code}")
+            if response.status_code == 200:
                 print(f"success={response.status_code}")
             else:
                 return response.status_code
@@ -52,19 +53,23 @@ class ThumnailByNaver(Thumnail):
         with open(f"test/thumnailjson/{store_uuid}_{store_name}.json", "w") as fp:
             json.dump(jsonData, fp, ensure_ascii=False)
         for store_info in place:
+            self.log(store_info)
             compare_storename = store_info["name"]
-            if store_name != compare_storename:
-                continue
+            if store_name.strip() != compare_storename.strip():
+                if store_name.strip() != store_info["display"].strip():
+                    continue
             thumnailUrls = store_info["thumUrls"]
             detail = store_info["businessStatus"]["status"]["detailInfo"]
             telDisplay = store_info["telDisplay"]
             self.log(f"storeuuid={store_uuid}, detail={detail}, tel={telDisplay}")
+            self.log(f"thumnailUrls={', '.join(thumnailUrls)}")
             for thumnailUrl in thumnailUrls:
+                self.log(thumnailUrl)
                 saved_name, original_name = self.getImageNameByUrl(store, thumnailUrl)
                 time.sleep(3)
                 print("for loop sleep 2")
                 response = session.request("GET", thumnailUrl)
-                if response.status_code.__eq__(200):
+                if response.status_code == 200:
                     print(f"success={response.status_code}")
                 else:
                     self.log(f"get thumnail image fail, {store_uuid}, {store_name}, {response.status_code}")
@@ -80,8 +85,9 @@ class ThumnailByNaver(Thumnail):
                     False)
 
             break
+        # self.log("for loop place end!!")
         time.sleep(3)
-        print("for loop sleep 3")
+        self.log("=====end of parseThumnailData=====")
         return response.status_code
     def setParams(self, address):
         return {
@@ -123,6 +129,18 @@ class ThumnailByNaver(Thumnail):
 
     def log(self, message):
         date, time = self.get_current_time()
+        if type(message) == dict:
+            with open('log.log',"a") as f:
+                json.dump(message, f, ensure_ascii=False)
+            convert_message = ""
+        elif type(message) == list:
+            convert_message = ", ".join(message)
+        elif type(message) == str:
+            convert_message = message
+        elif type(message) == int:
+            convert_message = str(message)
+        elif type(message) == float:
+            convert_message = str(message)
         with open('log.log',"a") as f:
-            f.write(f"[{date} {time}] {message}\n")
+            f.write(f"[{date} {time}] {convert_message}\n")
 
