@@ -119,20 +119,17 @@ class WinHistoryAllByArea(WinHistoryByArea):
     def __init__(self):
         self.winUtil = WinInfoUtil()
         self.urban = util.Variable().address_map
+        self.utils = util.Utils()
         # self.first_win_info = {}
         # self.second_win_info = {}
     
     def _insertcheckMetropolitanCityOther(self, sido, data_list, total_data):
-        with open("./log.log", "a") as f:
-            current = datetime.now()
-            f.write(f"[{current.strftime('%H:%M:%S')}] ")
-            f.write(f"sido: {sido}, Before total data: {total_data.__str__()}, {total_data.keys()[0]} dataList:{data_list.__str__()}\n")
+        self.utils.write_log_to_file("./log.log", f"sido: {sido}, Before total data: {total_data.__str__()}, {total_data.keys()[0]} dataList:{data_list.__str__()}")
         #주소 시/도 부분 수정하기 위함
         """
         소재지가 예를들어 대전서구, 대전광역시 서구, 대전시 중구, 대전 중구, 제주제주시 건입동 
-        이런식으로 되어있기 떄문에 분리
+        이런식으로 되어있기 때문에 분리
         """
-        
         for data in data_list:
             address = data["소재지"]
             for sigugun in self.urban[sido]:
@@ -145,10 +142,7 @@ class WinHistoryAllByArea(WinHistoryByArea):
                 # addressArr[0] = sido
             data["소재지"] = "".join(addressArr)
             total_data[(sido + " " + sigugun).strip()].append(data.copy())
-        with open("./log.log", "a") as f:
-            current = datetime.now()
-            f.write(f"[{current.strftime('%H:%M:%S')}] ")
-            f.write(f"sido: {sido}, After total data: {total_data.__str__()}\n")
+        self.utils.write_log_to_file("./log.log", f"sido: {sido}, After total data: {total_data.__str__()}")
         return total_data
     
     def _insertSidoOther(self, sido, data_list, total_data):
@@ -225,19 +219,11 @@ class WinHistoryAllByArea(WinHistoryByArea):
             postData = self.winUtil.get_win_history_postdata(sidoOther, "")
             firstHistory, secondHistory = \
                 self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
-            with open("./log.log", "a") as f:
-                current = datetime.now()
-                f.write(f"[{current.strftime('%H:%M:%S')}] ")
-                f.write(f"sidoOther: {sidoOther}, After parseWinHistoryLogic: {secondHistory.__str__()}\n")
+            self.utils.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After parseWinHistoryLogic: {secondHistory.__str__()}")
             firstSido = self._insertcheckMetropolitanCityOther(sido, firstHistory, firstSido)
-            with open("./log.log", "a") as f:
-                current = datetime.now()
-                f.write(f"[{current.strftime('%H:%M:%S')}] SECOND DATA MERGE")
+            self.utils.write_log_to_file("./log.log", f"SECOND DATA MERGE")
             secondSido = self._insertcheckMetropolitanCityOther(sido, secondHistory, secondSido)
-            with open("./log.log", "a") as f:
-                current = datetime.now()
-                f.write(f"[{current.strftime('%H:%M:%S')}] ")
-                f.write(f"sidoOther: {sidoOther}, After FUNCTION data: {secondSido.__str__()}\n")
+            self.utils.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After FUNCTION data: {secondSido.__str__()}")
         
         return firstSido, secondSido
 class WinInfoUtil:
@@ -300,12 +286,7 @@ class WinInfoUtil:
                     if m.__len__() == 2:
                         break
                     winHistoryValue = self.parse_win_history_data(restxt)
-                    
-                    with open("./log.log","a") as f:
-                        current = datetime.now()
-                        f.write(f"[{current.strftime('%H:%M:%S')}] ROUND:{postData['drwNo']}")
-                        f.write(winHistoryValue.__str__())
-                        f.write("\n")
+                    self.util.write_log_to_file("./log.log", f"ROUND:{postData['drwNo']}, {winHistoryValue.__str__()}")
                     #중복페이지 조회 로직: 조회결과가없을때는 항상 카운터를 올린다.
                     if len(winHistoryValue["1st"][0]) == 0:
                         breakCount += 1
