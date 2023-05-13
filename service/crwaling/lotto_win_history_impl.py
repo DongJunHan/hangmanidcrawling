@@ -42,7 +42,7 @@ class WinHistoryImpl:
         queryParam["method"] = "topStore"
         
         for key, value in winUtil.lottoTypes.items():
-            queryParam["pageGubun"] = "SP2000"
+            queryParam["pageGubun"] = value
             firstResult[key] = {}
             secondResult[key] = {}
             for sido in winUtil.address_map.keys():
@@ -56,7 +56,6 @@ class WinHistoryImpl:
             secondResult[key] = secondSido.copy()
             firstSido.clear()
             secondSido.clear()
-            break
         return firstResult, secondResult
 
     def _parseData(self, session, url, sido, headers, queryParam):

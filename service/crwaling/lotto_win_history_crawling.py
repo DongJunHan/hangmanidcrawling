@@ -119,57 +119,117 @@ class WinHistoryAllByArea(WinHistoryByArea):
     def __init__(self):
         self.winUtil = WinInfoUtil()
         self.urban = util.Variable().address_map
-        self.utils = util.Utils()
         # self.first_win_info = {}
         # self.second_win_info = {}
     
     def _insertcheckMetropolitanCityOther(self, sido, data_list, total_data):
-        self.utils.write_log_to_file("./log.log", f"sido: {sido}, Before total data: {total_data.__str__()}, {total_data.keys()[0]} dataList:{data_list.__str__()}")
+        self.winUtil.util.write_log_to_file("./log.log", f"sido: {sido}, Before total data: {total_data.__str__()}, dataList:{data_list.__str__()}")
         #주소 시/도 부분 수정하기 위함
         """
         소재지가 예를들어 대전서구, 대전광역시 서구, 대전시 중구, 대전 중구, 제주제주시 건입동 
         이런식으로 되어있기 때문에 분리
         """
         for data in data_list:
+            sigugun = None
             address = data["소재지"]
-            for sigugun in self.urban[sido]:
-                p = re.compile(f"{sigugun}")
-                p.match(address)
-                if len(sigugun.split()) > 1:
-                    pass
-                # if sigugun in addressArr[0] and sigugun == addressArr[1]:
-
-                # addressArr[0] = sido
-            data["소재지"] = "".join(addressArr)
-            total_data[(sido + " " + sigugun).strip()].append(data.copy())
-        self.utils.write_log_to_file("./log.log", f"sido: {sido}, After total data: {total_data.__str__()}")
+            for s in self.urban[sido]:
+                p = re.compile(f"{s}",re.DOTALL)
+                if len(p.findall(address)) == 0:
+                    if len(s.split()) > 1:
+                        attach = f"{''.join(s.split())}"
+                        p = re.compile(attach,re.DOTALL)
+                        if len(p.findall(address)) == 0:
+                            p = re.compile(s.split()[0],re.DOTALL)
+                            if len(p.findall(address)) == 0:
+                                self.winUtil.util.write_log_to_file("./log.log", f"There is no Match {address}, {s}")
+                            else:
+                                sigugun = ""
+                        else:
+                            sigugun = s
+                            address = address.replace(sido,"")
+                            address = address.replace(attach,"")
+                            data["소재지"] = f"{sido} {sigugun} {address.lstrip()}"
+                    else:
+                        self.winUtil.util.write_log_to_file("./log.log", f"sigugun one: {address}, {s}")
+                else:
+                    sigugun = s
+                    address = address.replace(sido,"")
+                    address = address.replace(s,"")
+                    data["소재지"] = f"{sido} {sigugun} {address.lstrip()}"
+            if sigugun is None or len(sigugun) == 0:
+                total_data[sido].append(data.copy())
+            else:
+                if (sido + " " + sigugun).strip() not in total_data.keys():
+                    total_data[(sido + " " + sigugun).strip()] = []
+                total_data[(sido + " " + sigugun).strip()].append(data.copy())
+        self.winUtil.util.write_log_to_file("./log.log", f"sido: {sido}, After total data: {total_data.__str__()}")
         return total_data
     
     def _insertSidoOther(self, sido, data_list, total_data):
+        """
+            경북/경상북도, 경남/경상남도와 같이 도에서 분리되는 부분 데이터가공을 위한 함수
+        """
         for data in data_list:
             data["소재지"] = data["소재지"].replace("  "," ")
+            address = data["소재지"]
             addressArr = data["소재지"].split()
-            if "동행복권" in addressArr[0]:
+            if "동행복권" in address:
                 continue
-            if "북도" in addressArr[0] or "남도" in addressArr[0]:
-                addressArr[0] = addressArr[0][0]+addressArr[0][2]
-            elif "특별시" in addressArr[0]:
-                addressArr[0] = addressArr[0].replace("특별시", "")
-            
-            if "광역시" in addressArr[0]:
-                addressArr[0] = addressArr[0].replace("광역시","")
-            elif addressArr[0] == "제주도":
-                addressArr[0] = "제주"
-
-            sigugunKey = addressArr[0] + " " + addressArr[1]
-            if sigugunKey not in total_data.keys():
-                total_data[sigugunKey] = []
-            
-            address = ""
-            for i in range(len(addressArr)):
-                address = address + " " + addressArr[i]
-            data["소재지"] = address
-            total_data[sigugunKey].append(data.copy())
+            sigugun = None
+            for s in self.urban[sido]:
+                p = re.compile(s)
+                if len(p.findall(address)) == 0:
+                    if len(s.split()) > 1:
+                        attach = f"{''.join(s.split())}" #창원시 마포합천구가 창원시마포합천구로 붙어있는 경우
+                        p = re.compile(attach,re.DOTALL)
+                        if len(p.findall(address)) == 0:
+                            p = re.compile(s.split()[0],re.DOTALL)#창원시 마포합천구가 창원시만 있는 경우
+                            if len(p.findall(address)) == 0:
+                                self.winUtil.util.write_log_to_file("./log.log", f"_insertSidoOther There is no Match {address}, {s}")
+                            else:
+                                #그냥 못찾은 경우와, 없는 경우를 구분해야함.
+                                if address.index(sido) > -1: #경북/경상북도 구분
+                                    p = re.compile(f"({sido})(.*?)(구)",re.DOTALL)
+                                    if p.findall(address) == 0: #창원시 만 있는 경우
+                                        sigugun = ""
+                                        addressArr[0] = addressArr[0].replace(s.split()[0],"")
+                                        address = " ".join(addressArr[1:])
+                                        data["소재지"] = f"{sido} {address.lstrip()}"
+                                        break
+                                else:
+                                    address = " ".join(addressArr[1:])
+                                    data["소재지"] = f"{sido} {address.lstrip()}"
+                                    break
+                        else:
+                            sigugun = s
+                            if address.index(sido) > -1:
+                                address = address.replace(sido,"")
+                            else:
+                                addressArr[0] = addressArr[0].replace(attach, "")
+                                address = " ".join(addressArr[1:])
+                            address = address.replace(attach,"")
+                            data["소재지"] = f"{sido} {sigugun} {address.lstrip()}"
+                    # else:
+                    #     self.winUtil.util.write_log_to_file("./log.log", f"_insertSidoOther sigugun one: {address}, {s}")
+                else:
+                    sigugun = s
+                    self.winUtil.util.write_log_to_file("./log.log", f"address: {address}, {sido}, {sigugun}, {data['소재지']}")
+                    if address.index(sido) > -1:
+                        address = address.replace(sido, "")
+                    else:
+                        address = " ".join(addressArr[1:])
+                    address = address.replace(sigugun, "")
+                    data["소재지"] = f"{sido} {sigugun} {address.lstrip()}"
+                    self.winUtil.util.write_log_to_file("./log.log", f"After address: {data['소재지']}")
+                    break
+            if sigugun is None or len(sigugun) == 0:
+                if len(total_data) == 0 or sido not in total_data.keys():
+                    total_data[sido] = []
+                total_data[sido].append(data.copy())
+            else:
+                if len(total_data) == 0 or sigugun not in total_data.keys(): 
+                    total_data[sigugun] = []
+                total_data[sigugun].append(data.copy())
         return total_data
 
     #method=topStore&pageGubun=L645
@@ -198,7 +258,10 @@ class WinHistoryAllByArea(WinHistoryByArea):
         #광역시는 인천도 있었고, 인천광역시도 존재했었는데, 지금 다시 검색해보니까 안보이는거 같음. 2023.05.10
         sidoOther = self.winUtil.checkMetropolitanCity(sido, queryParam["pageGubun"])
         # postData = self.winUtil.get_win_history_postdata(sido, "")
+        #경북,경남,전북 등 경상북도/경북 으로 불릴수있는 지역들 재검색
         if areaOther != None:
+            firstHistory.clear()
+            secondHistory.clear()
             postDataOther = self.winUtil.get_win_history_postdata(areaOther, "")
             firstHistory, secondHistory = \
                 self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
@@ -206,25 +269,25 @@ class WinHistoryAllByArea(WinHistoryByArea):
             secondSido = self._insertSidoOther(sido, secondHistory, secondSido)
             # firstSido[areaOther+" "+ sigugun] = firstHistory
             # secondSido[areaOther+" "+ sigugun] = secondHistory
-            firstHistory.clear()
-            secondHistory.clear()
-
-        firstHistory, secondHistory = \
-                self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
-        firstSido[sido] = firstHistory.copy()
-        secondSido[sido] = secondHistory.copy()
-        if sidoOther is not None:
+        elif sidoOther != None:
             firstHistory.clear()
             secondHistory.clear()
             postData = self.winUtil.get_win_history_postdata(sidoOther, "")
             firstHistory, secondHistory = \
                 self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
-            self.utils.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After parseWinHistoryLogic: {secondHistory.__str__()}")
+            self.winUtil.util.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After parseWinHistoryLogic: {secondHistory.__str__()}")
             firstSido = self._insertcheckMetropolitanCityOther(sido, firstHistory, firstSido)
-            self.utils.write_log_to_file("./log.log", f"SECOND DATA MERGE")
+            self.winUtil.util.write_log_to_file("./log.log", f"SECOND DATA MERGE")
             secondSido = self._insertcheckMetropolitanCityOther(sido, secondHistory, secondSido)
-            self.utils.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After FUNCTION data: {secondSido.__str__()}")
-        
+            self.winUtil.util.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After FUNCTION data: {secondSido.__str__()}")
+        else:
+            firstHistory.clear()
+            secondHistory.clear()
+            firstHistory, secondHistory = \
+                    self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
+            firstSido[sido] = firstHistory.copy()
+            secondSido[sido] = secondHistory.copy()
+            
         return firstSido, secondSido
 class WinInfoUtil:
     def __init__(self):
@@ -250,13 +313,12 @@ class WinInfoUtil:
         self.get_latitude_longitude = self.util.retry_wrapper(self.get_latitude_longitude)
 
     def parseWinHistoryLogic(self, session, url, initialRound, maxRound, postData, headers, queryParam):
-        print(f"post_data: {postData}, queryParam:{queryParam}")
         try:
             # postData = self.winUtil.get_win_history_postdata(sido, sigugun)
             firstHistory = []
             secondHistory = []
             duplicateFirst = None
-            print(f"winHistory maxRound: {maxRound}")
+            self.util.write_log_to_file("./log.log", f"winHistory maxRound: {maxRound}")
             for no in range(initialRound, int(maxRound)+1):
                 postData["drwNo"] = str(no)
                 duplicateSecond = None
@@ -326,7 +388,6 @@ class WinInfoUtil:
                         winHistoryValue["1st"] = []
                     if is_2stDuplicate:
                         winHistoryValue["2st"] = []
-                    print("@@@checkcheck@@")
                     firstHistory = self.get_win_info(winHistoryValue["1st"], queryParam["pageGubun"], postData["drwNo"], firstHistory)
                     secondHistory = self.get_win_info(winHistoryValue["2st"], queryParam["pageGubun"], postData["drwNo"], secondHistory)
                     postData["nowPage"] = str(int(postData["nowPage"]) + 1)
