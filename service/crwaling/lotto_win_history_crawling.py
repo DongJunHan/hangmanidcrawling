@@ -255,7 +255,7 @@ class WinHistoryAllByArea(WinHistoryByArea):
         maxRound = self.winUtil.find_max_round(session, url, headers, postData, queryParam)
         areaOther = self.winUtil.checkSidoArea(sido, queryParam["pageGubun"])
         # for sigugun in self.urban[sido]:
-        #광역시는 인천도 있었고, 인천광역시도 존재했었는데, 지금 다시 검색해보니까 안보이는거 같음. 2023.05.10
+        #광역시는 lotto645종류에서는 나오지 않고, sppetto,annual 복권에서만 나옴
         sidoOther = self.winUtil.checkMetropolitanCity(sido, queryParam["pageGubun"])
         # postData = self.winUtil.get_win_history_postdata(sido, "")
         #경북,경남,전북 등 경상북도/경북 으로 불릴수있는 지역들 재검색
@@ -265,8 +265,7 @@ class WinHistoryAllByArea(WinHistoryByArea):
             postDataOther = self.winUtil.get_win_history_postdata(areaOther, "")
             firstHistory, secondHistory = \
                 self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
-            firstSido = self._insertSidoOther(sido, firstHistory, firstSido)
-            secondSido = self._insertSidoOther(sido, secondHistory, secondSido)
+            
             # firstSido[areaOther+" "+ sigugun] = firstHistory
             # secondSido[areaOther+" "+ sigugun] = secondHistory
         elif sidoOther != None:
@@ -275,19 +274,20 @@ class WinHistoryAllByArea(WinHistoryByArea):
             postData = self.winUtil.get_win_history_postdata(sidoOther, "")
             firstHistory, secondHistory = \
                 self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
-            self.winUtil.util.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After parseWinHistoryLogic: {secondHistory.__str__()}")
-            firstSido = self._insertcheckMetropolitanCityOther(sido, firstHistory, firstSido)
-            self.winUtil.util.write_log_to_file("./log.log", f"SECOND DATA MERGE")
-            secondSido = self._insertcheckMetropolitanCityOther(sido, secondHistory, secondSido)
-            self.winUtil.util.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After FUNCTION data: {secondSido.__str__()}")
+            # self.winUtil.util.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After parseWinHistoryLogic: {secondHistory.__str__()}")
+            # firstSido = self._insertcheckMetropolitanCityOther(sido, firstHistory, firstSido)
+            # self.winUtil.util.write_log_to_file("./log.log", f"SECOND DATA MERGE")
+            # secondSido = self._insertcheckMetropolitanCityOther(sido, secondHistory, secondSido)
+            # self.winUtil.util.write_log_to_file("./log.log", f"sidoOther: {sidoOther}, After FUNCTION data: {secondSido.__str__()}")
         else:
             firstHistory.clear()
             secondHistory.clear()
             firstHistory, secondHistory = \
                     self.winUtil.parseWinHistoryLogic(session, url, 1, maxRound, postData, headers, queryParam)
-            firstSido[sido] = firstHistory.copy()
-            secondSido[sido] = secondHistory.copy()
-            
+            # firstSido[sido] = firstHistory.copy()
+            # secondSido[sido] = secondHistory.copy()
+        firstSido = self._insertSidoOther(sido, firstHistory, firstSido)
+        secondSido = self._insertSidoOther(sido, secondHistory, secondSido)
         return firstSido, secondSido
 class WinInfoUtil:
     def __init__(self):
