@@ -511,10 +511,10 @@ class WinInfoUtil:
         for value in historyValue:
             store = {}
             for k, v in value.items():
-                if k == "위치보기":
-                    store["위도경도"] = v
-                else:
-                    store[k] = v
+                # if k == "위치보기":
+                #     store["위도경도"] = v
+                # else:
+                store[k] = v
                 store["winRound"] = lotto_round
             result.append(store.copy())
             store.clear()

@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from service.crwaling import lotto_win_history_crawling
 from service.compare import data_compare
 from service.save import jdbc_config
+from datetime import datetime
 
 class WinHistoryImpl:
     def __init__(self, winObject:lotto_win_history_crawling.WinHistoryByArea):
@@ -22,7 +23,6 @@ class WinHistoryImpl:
         ol2, unknownOther2 = others.compareHistoryToStoreInfo(2, secondList)
         self._save_log_win_history(unknownOther)
         self._save_log_win_history(unknownOther2)
-
         self.jdbcConfig.save_win_history_data(l)
         self.jdbcConfig.save_win_history_data(l2)
 
@@ -63,7 +63,9 @@ class WinHistoryImpl:
     
     def _save_log_win_history(self, winhistory_data):
         for item in winhistory_data:
+            current = datetime.now()
             with open("./error_win_history.txt", "a") as f:
+                f.write(f"[{current.strftime('%H:%M:%S')}] ")
                 for k,v in item.items():
                     f.write(f"{k}:{str(v)}, ")
                 f.write("\n")
