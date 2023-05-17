@@ -16,13 +16,13 @@ class WinHistoryImpl:
         others = data_compare.OtherWinInfoCompare()
         l, unknown = lotto645.compareHistoryToStoreInfo(1, fristList["lotto645"])
         l2, unknown2 = lotto645.compareHistoryToStoreInfo(2, secondList["lotto645"])
-        self._save_log_win_history(unknown)
-        self._save_log_win_history(unknown2)
+        self._save_log_win_history(unknown, fristList["lotto645"].keys())
+        self._save_log_win_history(unknown2, secondList["lotto645"].keys())
             
         ol, unknownOther = others.compareHistoryToStoreInfo(1, fristList)
         ol2, unknownOther2 = others.compareHistoryToStoreInfo(2, secondList)
-        self._save_log_win_history(unknownOther)
-        self._save_log_win_history(unknownOther2)
+        self._save_log_win_history(unknownOther, fristList["lotto645"].keys())
+        self._save_log_win_history(unknownOther2, secondList["lotto645"].keys())
         self.jdbcConfig.save_win_history_data(l)
         self.jdbcConfig.save_win_history_data(l2)
 
@@ -61,11 +61,14 @@ class WinHistoryImpl:
     def _parseData(self, session, url, sido, headers, queryParam):
         return self.winObject.parseWinHistory(session, url, sido, headers, queryParam)
     
-    def _save_log_win_history(self, winhistory_data):
+    def _save_log_win_history(self, winhistory_data, sido_keys):
+        for k in sido_keys:
+            sido = k
+            break
         for item in winhistory_data:
             current = datetime.now()
             with open("./error_win_history.txt", "a") as f:
-                f.write(f"[{current.strftime('%H:%M:%S')}] ")
+                f.write(f"[{current.strftime('%H:%M:%S')}] {sido}, ")
                 for k,v in item.items():
                     f.write(f"{k}:{str(v)}, ")
                 f.write("\n")
