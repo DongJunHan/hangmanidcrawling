@@ -6,7 +6,7 @@ import html
 import re
 import abc
 from save import jdbc_config
-from dto import hangmaniDTO
+from dto import hangmaniDTO, util
 class StoreInfoCompare:
 
     def compare_longitude_and_latitude(self, originData, compareData):
@@ -237,18 +237,15 @@ class DataException(Exception):
     def __str__(self):
         return self.values
 class WinHistoryCommon:
+    def __init__(self):
+        self.utils = util.Utils()
     def doubleWhiteSpaceRemove(self, address):
-        #space가 두 칸씩 되어있는 주소가 있어 쿼리시 문제가 발생
-        temp = ""
-        addressSplit = address.split(" ")
-        for i in range(len(addressSplit)):
-            if len(addressSplit[i].replace(" ","")) == 0:
-                continue
-            temp = temp + addressSplit[i] + " "
-        
-        return temp.rstrip()
+        """
+            space가 두 칸씩 되어있는 주소가 있어 쿼리시 문제가 발생
+        """
+        return address.replace("  ", " ")
 
-    def changeAddress(self, sigunArr, address):
+    def changeAddress(self, sido, sigugun, address):
         """
             1. 지번일 때 - 왠만하면 폐점인 것으로 보임
             2. 도로명일 때 - 상호명은 굉장히 부정확할 확률이 많으므로 주소 'xx로'
@@ -257,10 +254,9 @@ class WinHistoryCommon:
         queryAddress = ""
        
         addressSplit = address.split(" ")
-        
-        if ("동" in addressSplit[2])\
-            and ("로" not in addressSplit[2]):
-            p = re.compile(f"({sigunArr[0]}\s{sigunArr[1]}\s)(.*?)(?=동)")
+        # self.utils.write_log_to_file("./log.log", f"addressSplit: {addressSplit}")
+        if ("동" in addressSplit[2]) and ("로" not in addressSplit[2]): #도로명주소가 아니고, 지번주소인지 체크
+            p = re.compile(f"({sido}\s{sigugun}\s)(.*?)(?=동)")
             matchTuple = p.findall(address)
             if len(matchTuple) > 0:
                 for j in range(len(matchTuple[0])):
@@ -269,11 +265,12 @@ class WinHistoryCommon:
                 queryAddress = address
         else:
             # (서울\s노원구\s.*?)([\d])(?=[\D].?)
-            p = re.compile(f"({sigunArr[0]}\s{sigunArr[1]}\s.*?)([\d])(?=[\D].?)")
+            p = re.compile(f"({sido}\s{sigugun}\s.*?)([\d][\D][\d]*)")
             matchTuple = p.findall(address)
             if len(matchTuple) > 0:
                 for j in range(len(matchTuple[0])):
                     queryAddress +=  matchTuple[0][j]
+                self.utils.write_log_to_file("./log.log", f"changeAddress Match Query: {matchTuple}")
             else:
                 queryAddress = address
         return queryAddress
@@ -290,7 +287,8 @@ class WinHistoryCommon:
                 result = matchTuple[0][0]
             else:
                 result = matchTuple[0][2]
-        elif "로또" in store_name:
+        
+        if "로또" in store_name:
             p = re.compile("(.*)(로또)(.*)")
             matchTuple = p.findall(store_name)
             if len(matchTuple[0][0]) > len(matchTuple[0][2]):
@@ -319,6 +317,7 @@ class OtherWinInfoCompare(WinHistoryInfoCompare):
     def __init__(self):
         self.jdbcConfig = jdbc_config.JDBCConfig()
         self.winHistoryCommon = WinHistoryCommon()
+        self.utils = util.Utils()
     
     def _getStoreInfoByOther5WinHistory(self, store_name, query_address, sido, sigugun):
         query = f"select storeuuid, storename from store where\
@@ -363,45 +362,61 @@ class OtherWinInfoCompare(WinHistoryInfoCompare):
             lottoid = self.jdbcConfig.select_query\
                         (f"select lottoid from lotto_type where lottoname='{lottoType}'",\
                         selectFlag)[0]["lottoid"]
-            for sidoSigugun, v in values.items():
-                sigunArr = sidoSigugun.split(" ")
-                for i in range(len(v)):
-                    v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
-                    queryAddress = self.winHistoryCommon.changeAddress(sigunArr, v[i]["소재지"])
-                    storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
-                    # and storename like ('%{storeName}%')\
-                    query, queryResult = self._getStoreInfoByOther5WinHistory\
-                                    (storeName, queryAddress, sigunArr[0], sigunArr[1])
-                    #select 결과가 2개 이상 나올 때 예외처리
-                    if queryResult.__len__() > 1:
-                        print(f"{queryResult}\n {v[i]}, winRank : {rank}, {query}")
-                        for p in range(len(queryResult)):
-                            print(queryResult[p]['storename'])
-                            if queryResult[p]["storename"].find(v[i]['상호명']) > -1:
-                                queryResult = [queryResult[p]]
-                        if len(queryResult) > 1:
+            for sido, o in values.items():
+                for sigugun, v in o.items():
+                    for i in range(len(v)):
+                        v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
+                        queryAddress = self.winHistoryCommon.changeAddress(sido, sigugun, v[i]["소재지"])
+                        storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
+                        aa = queryAddress.split(" ")
+                        if sido != "세종" and (sido != aa[0] or sigugun != aa[1]):
                             continue
-                            # raise DataException("같은 상호명이 두 곳 이상입니다.")
-                    if len(queryResult) == 0:
-                        #마지막으로 원본 주소로 쿼리를 날려본다.
-                        query = f"select storeuuid, storename from store where \
-                                storeaddress='{v[i]['소재지']}'\
-                                and storesido='{sigunArr[0]}'\
-                                and storesigugun='{sigunArr[1]}';"
-                        queryResult = self.jdbcConfig.select_query(query, selectFlag)
+                        elif sido == "세종" and sido != aa[0]:
+                            self.utils.write_log_to_file("./log.log", f"continueOther: {v[i]}, aa: {aa}")
+                            continue
+                        if sido == "세종":
+                            sigugun = ""
+                        # and storename like ('%{storeName}%')\
+                        query, queryResult = self._getStoreInfoByOther5WinHistory\
+                                        (storeName, queryAddress, sido, sigugun)
+                        #select 결과가 2개 이상 나올 때 예외처리
+                        if queryResult.__len__() > 1:
+                            for p in range(len(queryResult)):
+                                if queryResult[p]["storename"].find(v[i]['상호명']) > -1:
+                                    queryResult = [queryResult[p]]
+                                    v[i]["로또타입"] = lottoType
+                                    v[i]["sido"] = sido
+                                    unknownStoreList.append(v[i])
+                                    break
+                            if len(queryResult) > 1:
+                                v[i]["로또타입"] = lottoType
+                                v[i]["sido"] = sido
+                                unknownStoreList.append(v[i])
+                                continue
+                                # raise DataException("같은 상호명이 두 곳 이상입니다.")
                         if len(queryResult) == 0:
-                            unknownStoreList.append(v[i])
-                            print(f"no match store data: {v[i]}, query: {query}\n")
-                            continue
-                    winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
-                    storeuuid = None
-                    result.append(winHistory)
+                            #마지막으로 원본 주소로 쿼리를 날려본다.
+                            query = f"select storeuuid, storename from store where \
+                                    storeaddress='{v[i]['소재지']}'\
+                                    and storesido='{sido}'\
+                                    and storesigugun='{sigugun}';"
+                            queryResult = self.jdbcConfig.select_query(query, selectFlag)
+                            if len(queryResult) == 0:
+                                v[i]["로또타입"] = lottoType
+                                v[i]["sido"] = sido
+                                unknownStoreList.append(v[i])
+                                print(f"no match store data: {v[i]}, query: {query}\n")
+                                continue
+                        winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
+                        storeuuid = None
+                        result.append(winHistory)
         return result, unknownStoreList
 
 class Lotto645WinInfoCompare(WinHistoryInfoCompare):
     def __init__(self):
         self.jdbcConfig = jdbc_config.JDBCConfig()
         self.winHistoryCommon = WinHistoryCommon()
+        self.utils = util.Utils()
 
     def _getStoreInfoByLotto645WinHistory(self, store_name, store_address, sido, sigugn, latitude, longitude):
         """
@@ -422,13 +437,14 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
                 and storelongitude like ('{longitude[:5]}%');"
                 
         queryResult = self.jdbcConfig.select_query(query, selectFlag)
-
+        self.utils.write_log_to_file("./log.log", f"1.{query}, ret: {queryResult}")
         if len(queryResult) == 0 or len(queryResult) > 1:
             query = f"select storeuuid, storename from store where \
                 storeaddress like ('{store_address}%') \
                 and storesido='{sido}'\
                 and storesigugun='{sigugn}';"
             queryResult = self.jdbcConfig.select_query(query, selectFlag)
+            self.utils.write_log_to_file("./log.log", f"2.{query}, ret: {queryResult}")
 
         if len(queryResult) == 0 or len(queryResult) > 1:
             query = f"select storeuuid, storename from store where \
@@ -438,16 +454,20 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
                 and storelatitude like ('{latitude[:5]}%')\
                 and storelongitude like ('{longitude[:6]}%');"
             queryResult = self.jdbcConfig.select_query(query, selectFlag)
+            self.utils.write_log_to_file("./log.log", f"3.{query}, ret: {queryResult}")
             if len(queryResult) == 0 or len(queryResult) > 1 :
                 query = f"select storeuuid, storename from store where \
                     storesigugun='{sigugn}'\
                     and storelatitude like ('{latitude[:6]}%')\
                     and storelongitude like ('{longitude[:7]}%');"
                 queryResult = self.jdbcConfig.select_query(query, selectFlag)
+                self.utils.write_log_to_file("./log.log", f"4.{query}, ret: {queryResult}")
         return query, queryResult
     
     def compareHistoryToStoreInfo(self, rank, win_history_info:dict):
         """
+            storeuuid식별자는 내가 만든 것이어서 파싱한 당첨내역을 가지고 상점을 특정하기가 쉽지 않음.
+            그래서 주소(소재지)를 가지고 하나씩 비교해가며 맞으면 비교하는 방식을 채택함.
             Args:
                 rank            : int 1등/2등
                 win_history_info: dict
@@ -462,45 +482,65 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
         # for lottoType, value in win_history_info.items():
         lottoid = self.jdbcConfig.select_query(f"select lottoid from lotto_type where lottoname='lotto645'", 
                         selectFlag)[0]["lottoid"]
-        for sidoSigugun, v in win_history_info.items():
-            sigunArr = sidoSigugun.split(" ")
-            for i in range(len(v)):
-                v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
-                queryAddress = self.winHistoryCommon.changeAddress(sigunArr, v[i]["소재지"])
-                storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
-  
-                latiLong = v[i]['위도경도'].split(",")
-                # and storename like ('%{storeName}%')\
-                query, queryResult = self._getStoreInfoByLotto645WinHistory\
-                                (storeName, queryAddress, sigunArr[0], sigunArr[1], latiLong[0], latiLong[1])
-
-                # else:
-                #     query = f"select storeuuid, storename from store where storesido='{sigunArr[0]}' \
-                #             and storesigugun='{sigunArr[1]}' \
-                #             and storeaddress like ('{queryAddress}%');"
-                    # queryResult = self.jdbcConfig.select_query(query, selectFlag)
-                #select 결과가 2개 이상 나올 때 예외처리
-                if queryResult.__len__() > 1:
-                    print(f"{queryResult}\n {v[i]}, winRank : {rank}, {query}")
-                    for p in range(len(queryResult)):
-                        print(queryResult[p]['storename'])
-                        if queryResult[p]["storename"].find(v[i]['상호명']) > -1:
-                            queryResult = [queryResult[p]]
-                    if len(queryResult) > 1:
+        for sido, o in win_history_info.items():
+            for sigugun, v in o.items():
+                for i in range(len(v)):
+                    v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
+                    self.utils.write_log_to_file("./log.log", f"After doubleWhiteSpaceRemove: {v[i]['소재지']}")
+                    queryAddress = self.winHistoryCommon.changeAddress(sido, sigugun, v[i]["소재지"])
+                    self.utils.write_log_to_file("./log.log", f"After changeAddress: {queryAddress}")
+                    self.utils.write_log_to_file("./log.log", f"Before changeStoreName: {v[i]['상호명']}")
+                    storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
+                    self.utils.write_log_to_file("./log.log", f"After changeStoreName: {storeName}")
+                    aa = queryAddress.split(" ")
+                    self.utils.write_log_to_file("./log.log", f"##address: {v[i]['소재지']}, sido: {sido != aa[0]} , sigugun: {sigugun != aa[1]}, aa: {aa}")
+                    if sido != "세종" and (sido != aa[0] or sigugun != aa[1]):
                         continue
-                        # raise DataException("같은 상호명이 두 곳 이상입니다.")
-                if len(queryResult) == 0:
-                    #마지막으로 원본 주소로 쿼리를 날려본다.
-                    query = f"select storeuuid, storename from store where \
-                            storeaddress='{v[i]['소재지']}'\
-                            and storesido='{sigunArr[0]}'\
-                            and storesigugun='{sigunArr[1]}';"
-                    queryResult = self.jdbcConfig.select_query(query, selectFlag)
+                    elif sido == "세종" and sido != aa[0]:
+                        continue
+                    latiLong = v[i]['위치보기'].split(",")
+                    if sido == "세종":
+                        sigugun = ""
+                    # and storename like ('%{storeName}%')\
+                    query, queryResult = self._getStoreInfoByLotto645WinHistory\
+                                    (storeName, queryAddress, sido, sigugun, latiLong[0], latiLong[1])
+                    # else:
+                    #     query = f"select storeuuid, storename from store where storesido='{sigunArr[0]}' \
+                    #             and storesigugun='{sigunArr[1]}' \
+                    #             and storeaddress like ('{queryAddress}%');"
+                        # queryResult = self.jdbcConfig.select_query(query, selectFlag)
+                    #select 결과가 2개 이상 나올 때 예외처리
+                    if queryResult.__len__() > 1:
+                        # print(f"queryResult: {queryResult}\nquery : {query}")
+                        for p in range(len(queryResult)):
+                            # print(queryResult[p]['storename'])
+                            if queryResult[p]["storename"].find(v[i]['상호명']) > -1:
+                                queryResult = [queryResult[p]]
+                                v[i]['로또타입'] = "lotto645"
+                                v[i]["sido"] = sido
+                                unknownStoreList.append(v[i])
+                                break
+                        if len(queryResult) > 1:
+                            v[i]['로또타입'] = "lotto645"
+                            v[i]["sido"] = sido
+                            unknownStoreList.append(v[i])
+                            continue
+                            # raise DataException("같은 상호명이 두 곳 이상입니다.")
                     if len(queryResult) == 0:
-                        unknownStoreList.append(v[i])
-                        print(f"no match store data: {v[i]}, query: {query}\n")
-                        continue
-                winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
-                storeuuid = None
-                result.append(winHistory)
+                        #마지막으로 원본 주소로 쿼리를 날려본다.
+                        query = f"select storeuuid, storename from store where \
+                                storeaddress='{v[i]['소재지']}'\
+                                and storesido='{sido}'\
+                                and storesigugun='{sigugun}';"
+                        queryResult = self.jdbcConfig.select_query(query, selectFlag)
+                        if len(queryResult) == 0:
+                            v[i]['로또타입'] = "lotto645"
+                            v[i]["sido"] = sido
+                            unknownStoreList.append(v[i])
+                            print(f"no match store data: {v[i]}, query: {query}\n")
+                            continue
+                    winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
+                    self.utils.write_log_to_file("./log.log", f"Result: {winHistory.__str__()}")
+                    storeuuid = None
+                    result.append(winHistory)
         return result, unknownStoreList
