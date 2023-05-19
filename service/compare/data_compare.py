@@ -352,6 +352,7 @@ class OtherWinInfoCompare(WinHistoryInfoCompare):
                 list[hangmaniDTO.WinHistory]
                 list[str] unknown Store
         """
+        self.utils.write_log_to_file("./log.log", f"Others Start")
         result = []
         unknownStoreList = []
         selectFlag = True
@@ -370,6 +371,7 @@ class OtherWinInfoCompare(WinHistoryInfoCompare):
                         storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
                         aa = queryAddress.split(" ")
                         if sido != "세종" and (sido != aa[0] or sigugun != aa[1]):
+                            self.utils.write_log_to_file("./log.log", f"continueOther: {v[i]}, aa: {aa}")
                             continue
                         elif sido == "세종" and sido != aa[0]:
                             self.utils.write_log_to_file("./log.log", f"continueOther: {v[i]}, aa: {aa}")
@@ -405,10 +407,11 @@ class OtherWinInfoCompare(WinHistoryInfoCompare):
                                 v[i]["로또타입"] = lottoType
                                 v[i]["sido"] = sido
                                 unknownStoreList.append(v[i])
-                                print(f"no match store data: {v[i]}, query: {query}\n")
+                                # print(f"no match store data: {v[i]}, query: {query}\n")
                                 continue
                         winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
                         storeuuid = None
+                        self.utils.write_log_to_file("./log.log", f"Result: {winHistory.__str__()}")
                         result.append(winHistory)
         return result, unknownStoreList
 
@@ -476,6 +479,7 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
                 list[hangmaniDTO.WinHistory]
                 list[str] unknown Store
         """
+        self.utils.write_log_to_file("./log.log", f"lotto645 Start")
         result = []
         unknownStoreList = []
         selectFlag = True
@@ -486,15 +490,16 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
             for sigugun, v in o.items():
                 for i in range(len(v)):
                     v[i]["소재지"] = self.winHistoryCommon.doubleWhiteSpaceRemove(v[i]["소재지"])
-                    self.utils.write_log_to_file("./log.log", f"After doubleWhiteSpaceRemove: {v[i]['소재지']}")
+                    # self.utils.write_log_to_file("./log.log", f"After doubleWhiteSpaceRemove: {v[i]['소재지']}")
                     queryAddress = self.winHistoryCommon.changeAddress(sido, sigugun, v[i]["소재지"])
-                    self.utils.write_log_to_file("./log.log", f"After changeAddress: {queryAddress}")
-                    self.utils.write_log_to_file("./log.log", f"Before changeStoreName: {v[i]['상호명']}")
+                    # self.utils.write_log_to_file("./log.log", f"After changeAddress: {queryAddress}")
+                    # self.utils.write_log_to_file("./log.log", f"Before changeStoreName: {v[i]['상호명']}")
                     storeName = self.winHistoryCommon.changeStoreName(v[i]['상호명'])
-                    self.utils.write_log_to_file("./log.log", f"After changeStoreName: {storeName}")
+                    # self.utils.write_log_to_file("./log.log", f"After changeStoreName: {storeName}")
                     aa = queryAddress.split(" ")
-                    self.utils.write_log_to_file("./log.log", f"##address: {v[i]['소재지']}, sido: {sido != aa[0]} , sigugun: {sigugun != aa[1]}, aa: {aa}")
+                    # self.utils.write_log_to_file("./log.log", f"##address: {v[i]['소재지']}, sido: {sido != aa[0]} , sigugun: {sigugun != aa[1]}, aa: {aa}")
                     if sido != "세종" and (sido != aa[0] or sigugun != aa[1]):
+                        self.utils.write_log_to_file("./log.log", f"continue Lotto645: {v[i]}, aa: {aa}")
                         continue
                     elif sido == "세종" and sido != aa[0]:
                         continue
@@ -537,7 +542,7 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
                             v[i]['로또타입'] = "lotto645"
                             v[i]["sido"] = sido
                             unknownStoreList.append(v[i])
-                            print(f"no match store data: {v[i]}, query: {query}\n")
+                            # print(f"no match store data: {v[i]}, query: {query}\n")
                             continue
                     winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
                     self.utils.write_log_to_file("./log.log", f"Result: {winHistory.__str__()}")
