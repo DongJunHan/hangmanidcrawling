@@ -542,7 +542,6 @@ class Lotto645WinInfoCompare(WinHistoryInfoCompare):
                             v[i]['로또타입'] = "lotto645"
                             v[i]["sido"] = sido
                             unknownStoreList.append(v[i])
-                            # print(f"no match store data: {v[i]}, query: {query}\n")
                             continue
                     winHistory = hangmaniDTO.WinHistory(queryResult[0]["storeuuid"], int(v[i]["winRound"]), rank, lottoid)
                     self.utils.write_log_to_file("./log.log", f"Result: {winHistory.__str__()}")
