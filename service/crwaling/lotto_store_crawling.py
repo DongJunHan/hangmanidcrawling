@@ -3,6 +3,7 @@
 2. 군들을 통해서 주소 검색 (https://dhlottery.co.kr/store.do?method=sellerInfo645Result)
 or
 1. 시/도, 도/군들을 가지고 있다가 바로 2번을 수행
+
 """
 import sys
 import os
