@@ -127,7 +127,6 @@ class DBUtil:
     def convert_to_schema(self, cursor):
         column_names = [record[0].lower() for record in cursor.description]
         column_and_values = [dict(zip(column_names, record)) for record in cursor.fetchall()]
-        # return ExoplanetSchema().load(column_and_values, many=True)
         return column_and_values
 
     def get_config_data(self):
